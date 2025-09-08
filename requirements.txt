@@ -1,6 +1,6 @@
-streamlit
+streamlit==1.38.0
 tensorflow==2.14.1
 keras==2.14.0
 numpy
 pandas
-opencv-python
+opencv-python-headless
