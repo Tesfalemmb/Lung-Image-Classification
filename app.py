@@ -1,19 +1,3 @@
-# @title 🫁 Lung Classification Web App (With Probability Bar Chart + Grad-CAM)
-# ===============================
-# 1. Install dependencies
-# ===============================
-!pip install streamlit pyngrok tensorflow pillow matplotlib opencv-python-headless --quiet
-
-# ===============================
-# 2. Authenticate ngrok (replace with your token if different)
-# ===============================
-!pkill -f ngrok || echo "No old ngrok processes running"
-!ngrok config add-authtoken 30dOVNGZkPDo7jaZvHxnNLJeEg6_jnGobTNd3XNYoXurk2wv
-
-# ===============================
-# 3. Write Streamlit app to file
-# ===============================
-app_code = """
 import streamlit as st
 import numpy as np
 import tensorflow as tf
@@ -23,8 +7,10 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.applications.efficientnet import preprocess_input
 from PIL import Image
 
-# Load your trained model
-MODEL_PATH = '/content/drive/MyDrive/lung_classification_model_efficientnetb0.h5'
+# ===============================
+# Load trained model
+# ===============================
+MODEL_PATH = "model/lung_classification_model_efficientnetb0.h5"
 model = tf.keras.models.load_model(MODEL_PATH)
 
 # Define class names
@@ -54,16 +40,13 @@ def get_gradcam(img_array, model, class_index):
         loss = predictions[:, class_index]
 
     grads = tape.gradient(loss, conv_outputs)
-
-    # ✅ grads shape = (1, H, W, C)
     pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
 
-    conv_outputs = conv_outputs[0]  # (H, W, C)
+    conv_outputs = conv_outputs[0]
     heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
 
     heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
     return heatmap
-
 
 # -----------------------------
 # Streamlit UI
@@ -81,18 +64,15 @@ if uploaded_file is not None:
     img_resized = img.resize((224, 224))
     img_array = image.img_to_array(img_resized)
     img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)  # ✅ Proper preprocessing
+    img_array = preprocess_input(img_array)
 
     # Make prediction
     preds = model.predict(img_array)[0]
-    
-    st.write("### Prediction Probabilities:")
 
-    # Display class probabilities
+    st.write("### Prediction Probabilities:")
     for i, prob in enumerate(preds):
         st.write(f"{class_names[i]}: {prob*100:.2f}%")
 
-    # Final prediction
     pred_class_index = np.argmax(preds)
     pred_class = class_names[pred_class_index]
     confidence = np.max(preds) * 100
@@ -109,7 +89,7 @@ if uploaded_file is not None:
     st.pyplot(fig)
 
     # -----------------------------
-    # Generate and show Grad-CAM
+    # Grad-CAM Visualization
     # -----------------------------
     st.write("### 🔥 Grad-CAM Visualization")
 
@@ -119,21 +99,12 @@ if uploaded_file is not None:
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
     superimposed_img = cv2.addWeighted(np.array(img), 0.6, heatmap, 0.4, 0)
-
     st.image(superimposed_img, caption=f"Grad-CAM for {pred_class}", use_column_width=True)
-"""
 
-with open("app.py", "w") as f:
-    f.write(app_code)
-
-# ===============================
-# 4. Run Streamlit app in background
-# ===============================
-!streamlit run app.py --server.port 8501 &>/dev/null&
-
-# ===============================
-# 5. Expose with ngrok
-# ===============================
-from pyngrok import ngrok
-public_url = ngrok.connect(8501)
-print("🌍 Your Web App is live at:", public_url)
+    # Explain colors meaning
+    st.write("### 🎨 What the Colors Mean in the Lung Image:")
+    st.markdown("""
+    - 🔴 **Red / Bright Yellow** → High Importance: *"Pay attention here! This strongly influenced the decision."*  
+    - 🟢 **Green / Light Blue** → Medium Importance: *"Somewhat relevant, but not the most critical."*  
+    - 🔵 **Dark Blue / Black** → Low Importance: *"Ignored this area; it didn’t help in the decision."*  
+    """)
