@@ -4,3 +4,6 @@ numpy
 pillow
 matplotlib
 opencv-python-headless
+streamlit
+tensorflow==2.14.1
+keras==2.14.0
