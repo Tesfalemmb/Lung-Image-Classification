@@ -10,7 +10,7 @@ from PIL import Image
 # ===============================
 # Load trained model
 # ===============================
-MODEL_PATH = "model/lung_classification_model_efficientnetb0.h5"
+MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
 model = tf.keras.models.load_model(MODEL_PATH)
 
 # Define class names
