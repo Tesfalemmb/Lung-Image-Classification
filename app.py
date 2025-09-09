@@ -4,6 +4,7 @@ from PIL import Image
 import os
 import cv2
 import matplotlib.pyplot as plt
+import tensorflow as tf
 
 # Set page configuration
 st.set_page_config(
@@ -12,41 +13,32 @@ st.set_page_config(
     layout="wide"
 )
 
-# Try to import TensorFlow
-try:
-    import tensorflow as tf
-    TENSORFLOW_AVAILABLE = True
-except ImportError:
-    TENSORFLOW_AVAILABLE = False
-    st.error("TensorFlow not available. Please check requirements.txt.")
-
-# Path to the saved full model (same as Ngrok)
+# Path to the full saved model (same as Ngrok)
 MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'
 
 @st.cache_resource
 def load_model():
-    """Load full saved model to match Ngrok predictions"""
-    if not TENSORFLOW_AVAILABLE:
-        return None
+    """Load the full saved model to match Ngrok predictions"""
     if not os.path.exists(MODEL_PATH):
         st.error(f"❌ Model file not found: {MODEL_PATH}")
         return None
     try:
+        # Load full saved model; do NOT rebuild architecture
         model = tf.keras.models.load_model(MODEL_PATH)
         return model
     except Exception as e:
         st.error(f"❌ Error loading model: {str(e)}")
         return None
 
-# Load the model
+# Load model
 model = load_model()
 
 # Class names
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 
 def preprocess_image(img):
-    """Preprocess image the same way as Ngrok app"""
-    img = img.convert('RGB')  # ensure 3 channels
+    """Preprocess image exactly like Ngrok app"""
+    img = img.convert('RGB')  # Ensure 3 channels
     img_resized = img.resize((224, 224))
     img_array = np.array(img_resized)
     img_array = np.expand_dims(img_array, axis=0)
@@ -58,7 +50,7 @@ def get_gradcam(img_array, model, class_index):
     if model is None:
         return None
 
-    # Find last conv layer
+    # Find the last convolutional layer
     last_conv_layer = None
     for layer in reversed(model.layers):
         if 'conv' in layer.name.lower():
@@ -100,13 +92,14 @@ def main():
             st.error("Model failed to load. Please check the model file.")
             return
 
+        # Preprocess and predict
         img_array = preprocess_image(img)
         preds = model.predict(img_array, verbose=0)[0]
         pred_class_index = np.argmax(preds)
         pred_class = class_names[pred_class_index]
         confidence = np.max(preds) * 100
 
-        # Grad-CAM
+        # Generate Grad-CAM overlay
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
             heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
@@ -117,14 +110,14 @@ def main():
         else:
             superimposed_img = np.array(img.convert('RGB'))
 
-        # Display original and Grad-CAM
+        # Display original and Grad-CAM overlay side by side
         col1, col2 = st.columns(2)
         with col1:
             st.image(img, caption="Original Image", use_column_width=True)
         with col2:
             st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
 
-        # Display prediction chart and final result side by side (half-screen each)
+        # Prediction chart and final result side by side
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📊 Prediction Confidence")
