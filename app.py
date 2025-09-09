@@ -5,6 +5,19 @@ import matplotlib.pyplot as plt
 import cv2
 from PIL import Image
 import os
+import subprocess
+import sys
+
+# Install matplotlib if not present
+try:
+    import matplotlib
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib==3.7.5"])
+    import matplotlib
+
+# Rest of your imports
+import streamlit as st
+import numpy as np
 
 # Set page configuration
 st.set_page_config(
