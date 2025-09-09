@@ -153,34 +153,36 @@ def main():
             else:
                 superimposed_img = np.array(img.convert('RGB'))
 
-            # Display side by side
+            # Display original and overlay side by side
             col1, col2 = st.columns(2)
             with col1:
                 st.image(img, caption="Original Image", use_column_width=True)
             with col2:
                 st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
 
-            # Prediction bar chart with matplotlib
-            st.subheader("📊 Prediction Confidence")
-            fig, ax = plt.subplots(figsize=(6, 3))
-            colors = ["green", "red", "blue", "orange"]
-            ax.barh(class_names, preds * 100, color=colors)
-            ax.set_xlim([0, 100])
-            ax.set_xlabel("Probability (%)")
-            ax.set_title("Prediction Confidence")
-            for i, v in enumerate(preds * 100):
-                ax.text(v + 1, i, f"{v:.2f}%", va="center")
-            st.pyplot(fig)
+            # Display prediction chart and final result side by side
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.subheader("📊 Prediction Confidence")
+                fig, ax = plt.subplots(figsize=(6, 3))
+                colors = ["green", "red", "blue", "orange"]
+                ax.barh(class_names, preds * 100, color=colors)
+                ax.set_xlim([0, 100])
+                ax.set_xlabel("Probability (%)")
+                ax.set_title("Prediction Confidence")
+                for i, v in enumerate(preds * 100):
+                    ax.text(v + 1, i, f"{v:.2f}%", va="center")
+                st.pyplot(fig)
 
-            # Final prediction
-            prediction_color = (
-                "green" if pred_class == "Healthy" else
-                "red" if pred_class == "Inflammation" else
-                "blue" if pred_class == "Neoplastic" else
-                "orange"
-            )
-            st.markdown(f"<h3 style='color: {prediction_color}'>✅ Final Prediction: {pred_class}</h3>", unsafe_allow_html=True)
-            st.info(f"**Confidence: {confidence:.2f}%**")
+            with col2:
+                prediction_color = (
+                    "green" if pred_class == "Healthy" else
+                    "red" if pred_class == "Inflammation" else
+                    "blue" if pred_class == "Neoplastic" else
+                    "orange"
+                )
+                st.markdown(f"<h3 style='color: {prediction_color}'>✅ Final Prediction: {pred_class}</h3>", unsafe_allow_html=True)
+                st.info(f"**Confidence: {confidence:.2f}%**")
     else:
         st.info("👆 Please upload a lung image to get started.")
 
