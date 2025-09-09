@@ -1,5 +1,43 @@
 import subprocess
 import sys
+import os
+
+# --- INSTALLATION FALLBACK ---
+# This will run even if requirements.txt fails
+required_packages = [
+    'tensorflow==2.15.0',
+    'matplotlib==3.7.5', 
+    'opencv-python-headless==4.8.1.78',
+    'protobuf==3.20.3',
+    'Pillow==10.1.0',
+    'numpy==1.24.3',
+    'h5py==3.9.0'
+]
+
+for package in required_packages:
+    package_name = package.split('==')[0]
+    try:
+        __import__(package_name)
+    except ImportError:
+        print(f"Installing {package}...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
+        except:
+            print(f"Failed to install {package}, trying without version...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name, "--quiet"])
+
+# --- NOW IMPORT EVERYTHING ---
+import streamlit as st
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import cv2
+from PIL import Image
+import os
+
+# ... rest of your app code continues here
+import subprocess
+import sys
 
 # Install required packages first
 required_packages = [
