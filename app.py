@@ -1,170 +1,231 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-import tensorflow as tf
 import os
-import matplotlib.pyplot as plt
 import cv2
 
-# -------------------------------
-# Streamlit page config
-# -------------------------------
+# Set page configuration
 st.set_page_config(
     page_title="Lung Classification App",
     page_icon="🫁",
     layout="wide"
 )
 
-# -------------------------------
-# Load Model
-# -------------------------------
-MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
+# Try to import TensorFlow
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    st.error("TensorFlow not available. Please check requirements.txt.")
+
+# Load your trained model
+MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'
 
 @st.cache_resource
 def load_model():
+    """Load and cache the trained model"""
+    if not TENSORFLOW_AVAILABLE:
+        return None
+        
     try:
         if not os.path.exists(MODEL_PATH):
-            st.error(f"❌ Model not found at {MODEL_PATH}")
+            st.error(f"❌ Model file not found at: {MODEL_PATH}")
             return None
-        model = tf.keras.models.load_model(MODEL_PATH)
+        
+        # Build model with correct 3-channel input architecture
+        base_model = tf.keras.applications.EfficientNetB0(
+            include_top=False,
+            input_shape=(224, 224, 3),  # 3-channel input
+            weights=None
+        )
+        
+        # Add custom layers (adjust based on your original model)
+        x = base_model.output
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        x = tf.keras.layers.Dense(128, activation='relu')(x)
+        x = tf.keras.layers.Dropout(0.5)(x)
+        predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
+        
+        model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
+        
+        # Load the weights
+        model.load_weights(MODEL_PATH)
         st.success("✅ Model loaded successfully!")
         return model
+        
     except Exception as e:
         st.error(f"❌ Error loading model: {str(e)}")
         return None
 
+# Load model
 model = load_model()
 
-# -------------------------------
-# Classes
-# -------------------------------
-class_names = ["Healthy", "Inflammation", "Neoplastic", "Undetermined"]
+# Define class names
+class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 
-# -------------------------------
-# Preprocess
-# -------------------------------
-def preprocess_image(img):
+def get_gradcam(img_array, model, class_index):
+    """Generate Grad-CAM heatmap for the new model"""
+    if model is None:
+        return None
+        
+    # Find the last convolutional layer in the new model
+    last_conv_layer = None
+    for layer in reversed(model.layers):
+        if 'conv' in layer.name.lower() and 'block7a' in layer.name:  # Typical EfficientNet last conv layer
+            last_conv_layer = layer.name
+            break
+    
+    if last_conv_layer is None:
+        # Fallback: find any convolutional layer
+        for layer in reversed(model.layers):
+            if 'conv' in layer.name.lower():
+                last_conv_layer = layer.name
+                break
+
+    if last_conv_layer is None:
+        st.warning("⚠️ No suitable convolutional layer found for Grad-CAM")
+        return None
+
     try:
-        img = img.convert("RGB")  # ensure 3 channels
+        # Create gradient model
+        grad_model = tf.keras.models.Model(
+            inputs=model.inputs,
+            outputs=[model.get_layer(last_conv_layer).output, model.output]
+        )
+
+        # Compute gradients
+        with tf.GradientTape() as tape:
+            conv_outputs, predictions = grad_model(img_array)
+            loss = predictions[:, class_index]
+
+        # Calculate gradients
+        grads = tape.gradient(loss, conv_outputs)
+        if grads is None:
+            return None
+            
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+        conv_outputs = conv_outputs[0]
+        heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+        
+        # Normalize heatmap
+        heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
+        return heatmap
+        
+    except Exception as e:
+        st.error(f"Error generating Grad-CAM: {str(e)}")
+        return None
+
+def preprocess_image(img):
+    """Preprocess image for model prediction - USE RGB (3 channels)"""
+    try:
+        # Convert to RGB (3 channels)
+        img = img.convert('RGB')
         img_resized = img.resize((224, 224))
+        
+        # Convert to numpy array
         img_array = np.array(img_resized)
-        img_array = np.expand_dims(img_array, axis=0)
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+        
+        # Use EfficientNet preprocessing (normalizes for EfficientNet)
         img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
+        
         return img_array
     except Exception as e:
         st.error(f"Error preprocessing image: {str(e)}")
         return None
 
-# -------------------------------
-# Grad-CAM
-# -------------------------------
-def get_gradcam(img_array, model, class_index, layer_name=None):
-    if layer_name is None:
-        # Pick the last conv layer automatically
-        for layer in reversed(model.layers):
-            if isinstance(layer, tf.keras.layers.Conv2D):
-                layer_name = layer.name
-                break
-    
-    grad_model = tf.keras.models.Model(
-        [model.inputs],
-        [model.get_layer(layer_name).output, model.output]
-    )
-    
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(img_array)
-        loss = predictions[:, class_index]
-
-    grads = tape.gradient(loss, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-
-    conv_outputs = conv_outputs[0].numpy()
-    pooled_grads = pooled_grads.numpy()
-
-    for i in range(pooled_grads.shape[-1]):
-        conv_outputs[:, :, i] *= pooled_grads[i]
-
-    heatmap = np.mean(conv_outputs, axis=-1)
-    heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-10)
-
-    return heatmap
-
-def overlay_gradcam(img, heatmap, alpha=0.4):
-    heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-
-    img_array = np.array(img.convert("RGB"))
-    overlayed = cv2.addWeighted(img_array, 1 - alpha, heatmap, alpha, 0)
-    return overlayed
-
-# -------------------------------
-# Main App
-# -------------------------------
 def main():
-    st.title("🫁 Lung Image Classification with Grad-CAM")
-    st.write("Upload a lung image to classify it and visualize **where the AI is looking**.")
+    st.title("🫁 Lung Image Classification App")
+    st.write("Upload a lung image to classify it and visualize important regions using Grad-CAM.")
 
+    # File uploader
     uploaded_file = st.file_uploader(
-        "Choose a lung image",
+        "Choose a lung image", 
         type=["jpg", "jpeg", "png"],
-        help="Upload a lung CT/X-ray image"
+        help="Select a lung X-ray or CT scan image for analysis"
     )
 
     if uploaded_file is not None:
+        # Display uploaded image
         col1, col2 = st.columns(2)
-
+        
         with col1:
             img = Image.open(uploaded_file)
             st.image(img, caption="Original Image", use_column_width=True)
-
+        
         if model is None:
-            st.error("❌ Model not loaded.")
-            return
-
-        with st.spinner("🔄 Processing..."):
-            img_array = preprocess_image(img)
-            if img_array is None:
-                return
-            
-            preds = model.predict(img_array, verbose=0)[0]
-            pred_class_index = np.argmax(preds)
-            pred_class = class_names[pred_class_index]
-            confidence = np.max(preds) * 100
-
-            with col2:
-                st.subheader("📊 Prediction Results")
-                for cname, prob in zip(class_names, preds):
-                    color = "green" if cname == "Healthy" else "red" if cname == "Inflammation" else "blue" if cname == "Neoplastic" else "orange"
-                    st.markdown(
-                        f"**<span style='color: {color}'>{cname}:</span> {prob*100:.2f}%**",
-                        unsafe_allow_html=True
-                    )
-                    st.progress(float(prob))
+            st.error("Model failed to load. Please check the model file.")
+        else:
+            # Preprocess and predict
+            with st.spinner("🔄 Processing image..."):
+                img_array = preprocess_image(img)
                 
-                st.markdown(
-                    f"<h3 style='color: red'>✅ Final Prediction: {pred_class} ({confidence:.2f}%)</h3>",
-                    unsafe_allow_html=True
-                )
-
-            # ---------------- Grad-CAM ----------------
+                if img_array is None:
+                    st.error("Failed to process image")
+                    return
+                
+                # Make prediction
+                try:
+                    preds = model.predict(img_array, verbose=0)[0]
+                    
+                    with col2:
+                        st.subheader("📊 Prediction Results")
+                        
+                        # Show confidence scores
+                        for i, (class_name, prob) in enumerate(zip(class_names, preds)):
+                            color = "green" if class_name == "Healthy" else "red" if class_name == "Inflammation" else "blue" if class_name == "Neoplastic" else "orange"
+                            st.markdown(f"**<span style='color: {color}'>{class_name}:</span> {prob*100:.2f}%**", unsafe_allow_html=True)
+                            st.progress(float(prob))
+                        
+                        # Final prediction
+                        pred_class_index = np.argmax(preds)
+                        pred_class = class_names[pred_class_index]
+                        confidence = np.max(preds) * 100
+                        
+                        prediction_color = "green" if pred_class == "Healthy" else "red" if pred_class == "Inflammation" else "blue" if pred_class == "Neoplastic" else "orange"
+                        st.markdown(f"<h3 style='color: {prediction_color}'>✅ Final Prediction: {pred_class}</h3>", unsafe_allow_html=True)
+                        st.info(f"**Confidence: {confidence:.2f}%**")
+                
+                except Exception as e:
+                    st.error(f"Error making prediction: {str(e)}")
+                    return
+            
+            # Grad-CAM visualization
             st.subheader("🔥 Grad-CAM Visualization")
-            heatmap = get_gradcam(img_array, model, pred_class_index)
-            overlayed = overlay_gradcam(img, heatmap)
-
-            col3, col4 = st.columns(2)
-            with col3:
-                st.image(heatmap, caption="Grad-CAM Heatmap", use_column_width=True, clamp=True)
-            with col4:
-                st.image(overlayed, caption="Overlayed Heatmap", use_column_width=True)
-
-            st.info("**Color Meaning:** 🔴/🟡 = Strong evidence, 🟢/🔵 = Less important, ⚫ = Ignored")
+            st.write("The heatmap shows which areas influenced the model's decision:")
+            
+            with st.spinner("🔄 Generating explanation..."):
+                heatmap = get_gradcam(img_array, model, pred_class_index)
+                
+                if heatmap is not None:
+                    # Resize heatmap to match original image
+                    heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
+                    heatmap = np.uint8(255 * heatmap)
+                    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+                    
+                    # Convert PIL Image to numpy array for OpenCV
+                    img_np = np.array(img.convert('RGB'))
+                    
+                    # Superimpose heatmap on original image
+                    superimposed_img = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
+                    
+                    # Display results
+                    cam_col1, cam_col2 = st.columns(2)
+                    
+                    with cam_col1:
+                        st.image(heatmap, caption="Grad-CAM Heatmap", use_column_width=True)
+                    
+                    with cam_col2:
+                        st.image(superimposed_img, caption="Overlay on Image", use_column_width=True)
+                else:
+                    st.warning("Could not generate Grad-CAM visualization")
 
     else:
-        st.info("👆 Upload a lung image to get started.")
+        st.info("👆 Please upload a lung image to get started.")
 
     st.markdown("---")
-    st.caption("🔬 Educational & research use only. Not for medical diagnosis.")
+    st.caption("🔬 For educational and research purposes. Consult healthcare professionals for medical diagnoses.")
 
 if __name__ == "__main__":
     main()
