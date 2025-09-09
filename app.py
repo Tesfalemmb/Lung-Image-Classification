@@ -40,7 +40,7 @@ def load_model():
             weights=None
         )
         
-        # Add custom layers (adjust based on your original model)
+        # Add custom layers
         x = base_model.output
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
         x = tf.keras.layers.Dense(128, activation='relu')(x)
@@ -51,7 +51,6 @@ def load_model():
         
         # Load the weights
         model.load_weights(MODEL_PATH)
-        st.success("✅ Model loaded successfully!")
         return model
         
     except Exception as e:
@@ -65,26 +64,24 @@ model = load_model()
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 
 def get_gradcam(img_array, model, class_index):
-    """Generate Grad-CAM heatmap for the new model"""
+    """Generate Grad-CAM heatmap"""
     if model is None:
         return None
         
-    # Find the last convolutional layer in the new model
+    # Find the last convolutional layer
     last_conv_layer = None
     for layer in reversed(model.layers):
-        if 'conv' in layer.name.lower() and 'block7a' in layer.name:  # Typical EfficientNet last conv layer
+        if 'conv' in layer.name.lower() and 'block7a' in layer.name:
             last_conv_layer = layer.name
             break
     
     if last_conv_layer is None:
-        # Fallback: find any convolutional layer
         for layer in reversed(model.layers):
             if 'conv' in layer.name.lower():
                 last_conv_layer = layer.name
                 break
 
     if last_conv_layer is None:
-        st.warning("⚠️ No suitable convolutional layer found for Grad-CAM")
         return None
 
     try:
@@ -113,11 +110,10 @@ def get_gradcam(img_array, model, class_index):
         return heatmap
         
     except Exception as e:
-        st.error(f"Error generating Grad-CAM: {str(e)}")
         return None
 
 def preprocess_image(img):
-    """Preprocess image for model prediction - USE RGB (3 channels)"""
+    """Preprocess image for model prediction"""
     try:
         # Convert to RGB (3 channels)
         img = img.convert('RGB')
@@ -125,9 +121,9 @@ def preprocess_image(img):
         
         # Convert to numpy array
         img_array = np.array(img_resized)
-        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+        img_array = np.expand_dims(img_array, axis=0)
         
-        # Use EfficientNet preprocessing (normalizes for EfficientNet)
+        # Use EfficientNet preprocessing
         img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
         
         return img_array
@@ -137,7 +133,7 @@ def preprocess_image(img):
 
 def main():
     st.title("🫁 Lung Image Classification App")
-    st.write("Upload a lung image to classify it and visualize important regions using Grad-CAM.")
+    st.write("Upload a lung image to classify it and visualize important regions.")
 
     # File uploader
     uploaded_file = st.file_uploader(
@@ -152,7 +148,7 @@ def main():
         
         with col1:
             img = Image.open(uploaded_file)
-            st.image(img, caption="Original Image", use_column_width=True)
+            st.image(img, caption="Uploaded Image", use_column_width=True)
         
         if model is None:
             st.error("Model failed to load. Please check the model file.")
@@ -191,11 +187,11 @@ def main():
                     st.error(f"Error making prediction: {str(e)}")
                     return
             
-            # Grad-CAM visualization
-            st.subheader("🔥 Grad-CAM Visualization")
-            st.write("The heatmap shows which areas influenced the model's decision:")
+            # Grad-CAM visualization - ONLY OVERLAY
+            st.subheader("🔥 Model Explanation")
+            st.write("Heatmap overlay showing the areas that influenced the prediction:")
             
-            with st.spinner("🔄 Generating explanation..."):
+            with st.spinner("🔄 Generating heatmap overlay..."):
                 heatmap = get_gradcam(img_array, model, pred_class_index)
                 
                 if heatmap is not None:
@@ -210,14 +206,8 @@ def main():
                     # Superimpose heatmap on original image
                     superimposed_img = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
                     
-                    # Display results
-                    cam_col1, cam_col2 = st.columns(2)
-                    
-                    with cam_col1:
-                        st.image(heatmap, caption="Grad-CAM Heatmap", use_column_width=True)
-                    
-                    with cam_col2:
-                        st.image(superimposed_img, caption="Overlay on Image", use_column_width=True)
+                    # Display ONLY the overlay image
+                    st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
                 else:
                     st.warning("Could not generate Grad-CAM visualization")
 
