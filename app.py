@@ -30,7 +30,6 @@ def load_model():
     except Exception as e_full:
         st.warning("⚠️ Could not load as full model, trying weights-only...")
         try:
-            # Rebuild architecture
             base_model = EfficientNetB0(include_top=False, input_shape=(224,224,3), weights=None)
             x = base_model.output
             x = layers.GlobalAveragePooling2D()(x)
@@ -45,10 +44,10 @@ def load_model():
             st.error(f"❌ Failed to load model:\nFull model error: {str(e_full)}\nWeights-only error: {str(e_weights)}")
             return None
 
-# Load model
 model = load_model()
 
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
+colors = ["green","red","blue","orange"]  # For dynamic bars
 
 def preprocess_image(img):
     img = img.convert('RGB')
@@ -130,13 +129,14 @@ def main():
     with col1:
         st.subheader("📊 Prediction Confidence")
         fig, ax = plt.subplots(figsize=(5,2.5))
-        colors = ["green","red","blue","orange"]
         ax.barh(class_names, preds*100, color=colors)
         ax.set_xlim([0,100])
-        ax.set_xlabel("Probability (%)")
-        ax.set_title("Prediction Confidence")
+        ax.set_xlabel("Probability (%)", fontsize=11)
+        ax.set_title("Prediction Confidence", fontsize=13)
+        ax.tick_params(axis='y', labelsize=10)
+        ax.tick_params(axis='x', labelsize=10)
         for i, v in enumerate(preds*100):
-            ax.text(v+1, i, f"{v:.2f}%", va="center")
+            ax.text(v+1, i, f"{v:.2f}%", va="center", fontsize=10)
         st.pyplot(fig)
 
     with col2:
@@ -146,8 +146,8 @@ def main():
             "blue" if pred_class=="Neoplastic" else
             "orange"
         )
-        st.markdown(f"<h2 style='color:{prediction_color}'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<h4>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='color:{prediction_color}; font-size:28px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='font-size:20px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("🔬 For educational/research purposes. Consult healthcare professionals for medical diagnoses.")
