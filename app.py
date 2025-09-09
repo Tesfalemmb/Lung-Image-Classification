@@ -1,110 +1,99 @@
-import streamlit as st
+import os
+import io
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import cv2
-from tensorflow.keras.preprocessing import image
-from tensorflow.keras.applications.efficientnet import preprocess_input
 from PIL import Image
+import streamlit as st
 
-# ===============================
-# Load trained model
-# ===============================
-MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
-model = tf.keras.models.load_model(MODEL_PATH)
+st.set_page_config(page_title="Lung Image Classification", layout="centered")
 
-# Define class names
-class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
+# ---- Config ----
+MODEL_PATH = "lung_model.keras"
+CLASS_NAMES = ["healthy", "neoplastic", "inflammation", "undetermined"]  # adjust if needed
 
-# -----------------------------
-# Grad-CAM function
-# -----------------------------
-def get_gradcam(img_array, model, class_index):
-    # Find last convolutional layer
-    last_conv_layer = None
-    for layer in reversed(model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            last_conv_layer = layer.name
-            break
+# ---- Helpers ----
+@st.cache_resource(show_spinner=False)
+def load_model(path: str):
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Model file not found at '{path}'. "
+            "Make sure 'lung_model.keras' is committed to the repo."
+        )
+    # Using compile=False speeds loading and avoids missing custom objects
+    model = tf.keras.models.load_model(path, compile=False)
+    return model
 
-    if last_conv_layer is None:
-        raise ValueError("⚠️ No Conv2D layer found in the model.")
+def infer_input_size(model):
+    shape = model.input_shape
+    if isinstance(shape, list):  # handle multi-input models
+        shape = shape[0]
+    # Expect (None, H, W, C)
+    H = shape[1] if len(shape) > 1 and shape[1] else 224
+    W = shape[2] if len(shape) > 2 and shape[2] else 224
+    C = shape[3] if len(shape) > 3 and shape[3] else 3
+    return int(H), int(W), int(C)
 
-    grad_model = tf.keras.models.Model(
-        inputs=model.inputs,
-        outputs=[model.get_layer(last_conv_layer).output, model.output]
+def preprocess_image(img: Image.Image, target_hw_c):
+    H, W, C = target_hw_c
+    img = img.convert("RGB")
+    img = img.resize((W, H))
+    arr = np.asarray(img, dtype=np.float32) / 255.0
+    arr = np.expand_dims(arr, axis=0)
+    return arr
+
+def predict(model, batch):
+    preds = model.predict(batch, verbose=0)
+    if preds.ndim == 2 and preds.shape[0] == 1:
+        probs = tf.nn.softmax(preds[0]).numpy()
+        top_idx = int(np.argmax(probs))
+        return probs, top_idx
+    # Fallback: binary or other shapes
+    if preds.ndim == 1:
+        prob = float(preds[0])
+        return np.array([1 - prob, prob]), int(round(prob))
+    raise ValueError(f"Unexpected model output shape: {preds.shape}")
+
+# ---- UI ----
+st.title("🫁 Lung Image Classification")
+st.caption("Upload a lung image to get the predicted class and probabilities.")
+
+# Load model
+try:
+    with st.spinner("Loading model…"):
+        model = load_model(MODEL_PATH)
+        H, W, C = infer_input_size(model)
+except Exception as e:
+    st.error(
+        "Failed to load the model. "
+        "If you previously used a `.h5` file, convert it to `.keras` and commit it to `lung_model.keras`."
     )
+    st.exception(e)
+    st.stop()
 
-    with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(img_array)
-        loss = predictions[:, class_index]
+st.info(f"Model input expected: **{H}×{W}×{C}** (H×W×C)")
 
-    grads = tape.gradient(loss, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+uploaded = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+if uploaded:
+    try:
+        image = Image.open(io.BytesIO(uploaded.read()))
+        st.image(image, caption="Uploaded image", use_container_width=True)
 
-    conv_outputs = conv_outputs[0]
-    heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+        batch = preprocess_image(image, (H, W, C))
+        probs, top_idx = predict(model, batch)
 
-    heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
-    return heatmap
+        if len(CLASS_NAMES) == len(probs):
+            top_label = CLASS_NAMES[top_idx]
+            st.success(f"**Prediction:** {top_label}")
+            # Display probabilities as a simple table
+            st.subheader("Class probabilities")
+            for label, p in zip(CLASS_NAMES, probs):
+                st.write(f"- {label}: {p:.4f}")
+        else:
+            st.success(f"**Predicted class index:** {top_idx}")
+            st.write("Raw probabilities:", probs)
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-st.title("🫁 Lung Image Classification App (with Grad-CAM)")
-st.write("Upload a lung image to classify it and visualize important regions.")
-
-uploaded_file = st.file_uploader("Upload a lung image", type=["jpg", "jpeg", "png"])
-
-if uploaded_file is not None:
-    img = Image.open(uploaded_file).convert("RGB")
-    st.image(img, caption="Uploaded Image", use_column_width=True)
-
-    # Preprocess image
-    img_resized = img.resize((224, 224))
-    img_array = image.img_to_array(img_resized)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)
-
-    # Make prediction
-    preds = model.predict(img_array)[0]
-
-    st.write("### Prediction Probabilities:")
-    for i, prob in enumerate(preds):
-        st.write(f"{class_names[i]}: {prob*100:.2f}%")
-
-    pred_class_index = np.argmax(preds)
-    pred_class = class_names[pred_class_index]
-    confidence = np.max(preds) * 100
-    st.subheader(f"✅ Final Prediction: **{pred_class}** ({confidence:.2f}%)")
-
-    # Plot probability bar chart
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.barh(class_names, preds * 100, color="skyblue")
-    ax.set_xlim([0, 100])
-    ax.set_xlabel("Probability (%)")
-    ax.set_title("Prediction Confidence")
-    for i, v in enumerate(preds * 100):
-        ax.text(v + 1, i, f"{v:.2f}%", va="center")
-    st.pyplot(fig)
-
-    # -----------------------------
-    # Grad-CAM Visualization
-    # -----------------------------
-    st.write("### 🔥 Grad-CAM Visualization")
-
-    heatmap = get_gradcam(img_array, model, pred_class_index)
-    heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-
-    superimposed_img = cv2.addWeighted(np.array(img), 0.6, heatmap, 0.4, 0)
-    st.image(superimposed_img, caption=f"Grad-CAM for {pred_class}", use_column_width=True)
-
-    # Explain colors meaning
-    st.write("### 🎨 What the Colors Mean in the Lung Image:")
-    st.markdown("""
-    - 🔴 **Red / Bright Yellow** → High Importance: *"Pay attention here! This strongly influenced the decision."*  
-    - 🟢 **Green / Light Blue** → Medium Importance: *"Somewhat relevant, but not the most critical."*  
-    - 🔵 **Dark Blue / Black** → Low Importance: *"Ignored this area; it didn’t help in the decision."*  
-    """)
+    except Exception as e:
+        st.error("Error while processing or predicting. See details below.")
+        st.exception(e)
+else:
+    st.caption("Tip: If your model expects different classes, edit `CLASS_NAMES` in `app.py`.")
