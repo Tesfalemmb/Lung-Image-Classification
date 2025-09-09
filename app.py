@@ -4,13 +4,14 @@ import numpy as np
 from PIL import Image
 from tensorflow.keras.applications import EfficientNetB0  # register EfficientNet
 
+# --- Page configuration ---
 st.set_page_config(page_title="Lung Image Classification", layout="centered")
 st.title("🫁 Lung Image Classification")
 
-# Path to your model in the repo
+# --- Model path ---
 MODEL_PATH = "lung_model.keras"
 
-# Load model with caching
+# --- Load model with caching ---
 @st.cache_resource(show_spinner=True)
 def load_model():
     return tf.keras.models.load_model(MODEL_PATH, compile=False)
@@ -23,24 +24,35 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
+# --- Define class names ---
 CLASS_NAMES = ["healthy", "neoplastic", "inflammation", "undetermined"]
 
-# Upload image
+# --- File uploader ---
 uploaded = st.file_uploader("Upload a lung image", type=["jpg", "jpeg", "png"])
 if uploaded:
+    # Open image and ensure 3 channels
     img = Image.open(uploaded).convert("RGB")
     st.image(img, caption="Uploaded image", use_container_width=True)
 
-    # Preprocess
-    img_resized = img.resize((224, 224))  # adjust if your model expects different input size
-    arr = np.array(img_resized, dtype=np.float32) / 255.0
-    arr = np.expand_dims(arr, axis=0)
+    # --- Preprocess image ---
+    # Resize to match model input size
+    input_size = model.input_shape[1:3]  # automatically get HxW
+    img_resized = img.resize((input_size[1], input_size[0]))  # PIL uses (W,H)
+    img_array = np.array(img_resized, dtype=np.float32) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)  # shape: (1, H, W, 3)
 
-    # Predict
-    preds = model.predict(arr, verbose=0)
-    probs = tf.nn.softmax(preds[0]).numpy()
-    top_idx = int(np.argmax(probs))
-    st.success(f"Prediction: {CLASS_NAMES[top_idx]}")
-    st.subheader("Class probabilities")
-    for i, c in enumerate(CLASS_NAMES):
-        st.write(f"{c}: {probs[i]:.4f}")
+    # --- Predict ---
+    preds = model.predict(img_array, verbose=0)
+    
+    # Apply softmax if output is not already probabilities
+    if preds.shape[-1] == len(CLASS_NAMES):
+        probs = tf.nn.softmax(preds[0]).numpy()
+        top_idx = int(np.argmax(probs))
+        st.success(f"Prediction: {CLASS_NAMES[top_idx]}")
+        st.subheader("Class probabilities")
+        for i, c in enumerate(CLASS_NAMES):
+            st.write(f"{c}: {probs[i]:.4f}")
+    else:
+        # fallback for binary or unusual outputs
+        st.warning("Unexpected model output shape.")
+        st.write("Raw output:", preds)
