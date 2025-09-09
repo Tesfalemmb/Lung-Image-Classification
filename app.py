@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 import os
 import cv2
+import matplotlib.pyplot as plt
 
 # Set page configuration
 st.set_page_config(
@@ -159,25 +160,19 @@ def main():
             with col2:
                 st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
 
-            # Color-coded prediction bars below
-            st.subheader("📊 Prediction Results")
-            for i, (class_name, prob) in enumerate(zip(class_names, preds)):
-                color = (
-                    "green" if class_name == "Healthy" else
-                    "red" if class_name == "Inflammation" else
-                    "blue" if class_name == "Neoplastic" else
-                    "orange"
-                )
-                bar_html = f"""
-                <div style="margin-bottom: 10px;">
-                    <div style="font-weight:bold; color:{color};">{class_name}: {prob*100:.2f}%</div>
-                    <div style="background-color: #eee; border-radius: 5px; height: 20px; width: 100%;">
-                        <div style="width: {prob*100:.2f}%; background-color: {color}; height: 100%; border-radius: 5px;"></div>
-                    </div>
-                </div>
-                """
-                st.markdown(bar_html, unsafe_allow_html=True)
+            # Prediction bar chart with matplotlib
+            st.subheader("📊 Prediction Confidence")
+            fig, ax = plt.subplots(figsize=(6, 3))
+            colors = ["green", "red", "blue", "orange"]
+            ax.barh(class_names, preds * 100, color=colors)
+            ax.set_xlim([0, 100])
+            ax.set_xlabel("Probability (%)")
+            ax.set_title("Prediction Confidence")
+            for i, v in enumerate(preds * 100):
+                ax.text(v + 1, i, f"{v:.2f}%", va="center")
+            st.pyplot(fig)
 
+            # Final prediction
             prediction_color = (
                 "green" if pred_class == "Healthy" else
                 "red" if pred_class == "Inflammation" else
