@@ -1,8 +1,7 @@
-streamlit
-tensorflow
-pillow
-matplotlib
-opencv-python-headless
-numpy
-protobuf
-h5py
+streamlit==1.29.0
+tensorflow==2.15.0
+Pillow==10.1.0
+matplotlib==3.7.5
+opencv-python-headless==4.8.1.78
+numpy==1.24.3
+h5py==3.9.0  # Added for model validation
