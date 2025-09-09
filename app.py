@@ -1,27 +1,3 @@
-import subprocess
-import sys
-import os
-
-# --- INSTALLATION FALLBACK ---
-required_packages = [
-    'tensorflow==2.15.0',
-    'matplotlib==3.7.5', 
-    'opencv-python-headless==4.8.1.78',
-    'protobuf==3.20.3',
-    'Pillow==10.1.0',
-    'numpy==1.24.3',
-    'h5py==3.9.0'
-]
-
-for package in required_packages:
-    package_name = package.split('==')[0]
-    try:
-        __import__(package_name)
-    except ImportError:
-        print(f"Installing {package}...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
-
-# --- NOW IMPORT EVERYTHING ---
 import streamlit as st
 import numpy as np
 import tensorflow as tf
@@ -48,10 +24,18 @@ def load_model():
             st.error(f"Model file not found at: {MODEL_PATH}")
             return None
         
-        # Load model with custom object scope for compatibility
-        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-        st.success("✅ Model loaded successfully!")
-        return model
+        # Try different loading methods for compatibility
+        try:
+            model = tf.keras.models.load_model(MODEL_PATH)
+            return model
+        except:
+            try:
+                model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+                return model
+            except:
+                model = tf.keras.models.load_model(MODEL_PATH, safe_mode=False)
+                return model
+                
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
         return None
