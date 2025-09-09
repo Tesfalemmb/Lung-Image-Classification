@@ -160,18 +160,20 @@ def main():
             with col2:
                 st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
 
-            # Display prediction chart and final result side by side
-            col1, col2 = st.columns([2, 1])
+            # Display prediction chart and final result side by side (each takes half screen)
+            col1, col2 = st.columns(2)
             with col1:
                 st.subheader("📊 Prediction Confidence")
-                fig, ax = plt.subplots(figsize=(6, 3))
+                fig, ax = plt.subplots(figsize=(5, 2.5))  # smaller figure to fit half screen
                 colors = ["green", "red", "blue", "orange"]
                 ax.barh(class_names, preds * 100, color=colors)
                 ax.set_xlim([0, 100])
-                ax.set_xlabel("Probability (%)")
-                ax.set_title("Prediction Confidence")
+                ax.set_xlabel("Probability (%)", fontsize=10)
+                ax.set_title("Prediction Confidence", fontsize=12)
+                ax.tick_params(axis='y', labelsize=10)
+                ax.tick_params(axis='x', labelsize=10)
                 for i, v in enumerate(preds * 100):
-                    ax.text(v + 1, i, f"{v:.2f}%", va="center")
+                    ax.text(v + 1, i, f"{v:.2f}%", va="center", fontsize=10)
                 st.pyplot(fig)
 
             with col2:
@@ -181,8 +183,9 @@ def main():
                     "blue" if pred_class == "Neoplastic" else
                     "orange"
                 )
-                st.markdown(f"<h3 style='color: {prediction_color}'>✅ Final Prediction: {pred_class}</h3>", unsafe_allow_html=True)
-                st.info(f"**Confidence: {confidence:.2f}%**")
+                st.markdown(f"<h2 style='color: {prediction_color}'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
+                st.markdown(f"<h4>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
+
     else:
         st.info("👆 Please upload a lung image to get started.")
 
