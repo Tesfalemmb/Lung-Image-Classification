@@ -1,5 +1,8 @@
-streamlit==1.38.0
-tensorflow==2.20.0
-numpy
+streamlit
+tensorflow
 pillow
+matplotlib
 opencv-python-headless
+numpy
+protobuf
+h5py
