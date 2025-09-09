@@ -20,7 +20,7 @@ except ImportError:
     TENSORFLOW_AVAILABLE = False
     st.error("TensorFlow not available. Please check requirements.txt.")
 
-# Path to your full saved model (same as Ngrok)
+# Path to the saved full model (same as Ngrok)
 MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'
 
 @st.cache_resource
@@ -46,7 +46,7 @@ class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 
 def preprocess_image(img):
     """Preprocess image the same way as Ngrok app"""
-    img = img.convert('RGB')
+    img = img.convert('RGB')  # ensure 3 channels
     img_resized = img.resize((224, 224))
     img_array = np.array(img_resized)
     img_array = np.expand_dims(img_array, axis=0)
@@ -124,7 +124,7 @@ def main():
         with col2:
             st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
 
-        # Display prediction chart and final result side by side
+        # Display prediction chart and final result side by side (half-screen each)
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📊 Prediction Confidence")
