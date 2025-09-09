@@ -1,5 +1,36 @@
 import subprocess
 import sys
+
+# Install required packages first
+required_packages = [
+    'tensorflow==2.15.0',
+    'pillow==10.1.0', 
+    'matplotlib==3.8.2',
+    'opencv-python-headless==4.9.0.80',
+    'numpy==1.26.3',
+    'protobuf==3.20.3',
+    'h5py==3.10.0'
+]
+
+for package in required_packages:
+    try:
+        __import__(package.split('==')[0])
+    except ImportError:
+        print(f"Installing {package}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
+
+# Now import your actual packages
+import streamlit as st
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import cv2
+from PIL import Image
+import os
+
+# ... rest of your app code
+import subprocess
+import sys
 import os
 
 # Install missing packages before anything else
