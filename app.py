@@ -33,14 +33,12 @@ def load_model():
             st.error(f"❌ Model file not found at: {MODEL_PATH}")
             return None
         
-        # Build model with correct 3-channel input architecture
         base_model = tf.keras.applications.EfficientNetB0(
             include_top=False,
-            input_shape=(224, 224, 3),  # 3-channel input
+            input_shape=(224, 224, 3),
             weights=None
         )
         
-        # Add custom layers
         x = base_model.output
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
         x = tf.keras.layers.Dense(128, activation='relu')(x)
@@ -48,8 +46,6 @@ def load_model():
         predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
         
         model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
-        
-        # Load the weights
         model.load_weights(MODEL_PATH)
         return model
         
@@ -68,7 +64,6 @@ def get_gradcam(img_array, model, class_index):
     if model is None:
         return None
         
-    # Find the last convolutional layer
     last_conv_layer = None
     for layer in reversed(model.layers):
         if 'conv' in layer.name.lower() and 'block7a' in layer.name:
@@ -85,13 +80,11 @@ def get_gradcam(img_array, model, class_index):
         return None
 
     try:
-        # Create gradient model
         grad_model = tf.keras.models.Model(
             inputs=model.inputs,
             outputs=[model.get_layer(last_conv_layer).output, model.output]
         )
 
-        # Compute gradients
         with tf.GradientTape() as tape:
             conv_outputs, predictions = grad_model(img_array)
             loss = predictions[:, class_index]
@@ -166,7 +159,7 @@ def main():
             with col2:
                 st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
 
-            # Prediction bars below
+            # Color-coded prediction bars below
             st.subheader("📊 Prediction Results")
             for i, (class_name, prob) in enumerate(zip(class_names, preds)):
                 color = (
@@ -175,8 +168,15 @@ def main():
                     "blue" if class_name == "Neoplastic" else
                     "orange"
                 )
-                st.markdown(f"**<span style='color: {color}'>{class_name}:</span> {prob*100:.2f}%**", unsafe_allow_html=True)
-                st.progress(float(prob))
+                bar_html = f"""
+                <div style="margin-bottom: 10px;">
+                    <div style="font-weight:bold; color:{color};">{class_name}: {prob*100:.2f}%</div>
+                    <div style="background-color: #eee; border-radius: 5px; height: 20px; width: 100%;">
+                        <div style="width: {prob*100:.2f}%; background-color: {color}; height: 100%; border-radius: 5px;"></div>
+                    </div>
+                </div>
+                """
+                st.markdown(bar_html, unsafe_allow_html=True)
 
             prediction_color = (
                 "green" if pred_class == "Healthy" else
