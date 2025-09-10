@@ -4,6 +4,7 @@ from PIL import Image
 import os
 import cv2
 import matplotlib.pyplot as plt
+from io import BytesIO
 
 # Set page configuration
 st.set_page_config(
@@ -135,7 +136,9 @@ def main():
     )
 
     if uploaded_file is not None:
-        img = Image.open(uploaded_file).convert("RGB")  # ✅ Cloud-safe
+        # ✅ Cloud-safe read
+        uploaded_bytes = uploaded_file.read()
+        img = Image.open(BytesIO(uploaded_bytes)).convert("RGB")
 
         if model is None:
             st.error("Model failed to load. Please check the model file.")
