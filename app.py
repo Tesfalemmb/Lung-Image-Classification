@@ -124,7 +124,7 @@ def main():
     col_img, col_pred = st.columns([1.3, 1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        st.image(img.resize((700, 700)), caption="Uploaded Image", use_column_width=False)
+        st.image(img, caption="Uploaded Image", use_container_width=True)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -139,19 +139,22 @@ def main():
         st.markdown(f"<h4 style='font-size:22px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
 
     # -------------------------
-    # Bottom row: Grad-CAM + Interpretation
+    # Bottom row: Grad-CAM + Interpretation side by side
     # -------------------------
     col_heatmap, col_interpret = st.columns([1.3, 1])
     with col_heatmap:
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
-            heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
-            heatmap = np.uint8(255 * heatmap)
-            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-            img_np = np.array(img.resize((700,700)))
-            superimposed = cv2.addWeighted(img_np, 0.6, cv2.resize(heatmap,(700,700)), 0.4, 0)
-            st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=False)
+            # Resize overlay dynamically to uploaded image width
+            img_width = img.width
+            img_height = img.height
+            heatmap_resized = cv2.resize(heatmap, (img_width, img_height))
+            heatmap_resized = np.uint8(255 * heatmap_resized)
+            heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
+            img_np = np.array(img)
+            superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
+            st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=True)
         else:
             st.warning("Grad-CAM could not be generated")
 
