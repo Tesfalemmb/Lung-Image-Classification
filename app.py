@@ -22,11 +22,9 @@ except ImportError:
     TENSORFLOW_AVAILABLE = False
     st.error("TensorFlow not available. Please check requirements.txt.")
 
-MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'  # Full model file (architecture + weights)
+# Use your existing model
+MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
 
-# -------------------------
-# Load the full model only
-# -------------------------
 @st.cache_resource
 def load_model():
     if not TENSORFLOW_AVAILABLE:
@@ -162,8 +160,7 @@ def main():
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
             superimposed_resized = cv2.resize(superimposed, (500, 500))
             superimposed_resized = cv2.cvtColor(superimposed_resized, cv2.COLOR_BGR2RGB)
-            superimposed_resized = superimposed_resized.astype(np.uint8)
-            st.image(superimposed_resized, caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=False)
+            st.image(superimposed_resized, caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=False)
         else:
             st.warning("Grad-CAM could not be generated")
 
