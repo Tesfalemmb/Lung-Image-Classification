@@ -136,7 +136,6 @@ def main():
     )
 
     if uploaded_file is not None:
-        # Cloud-safe read
         uploaded_bytes = uploaded_file.read()
         img = Image.open(BytesIO(uploaded_bytes)).convert("RGB")
 
@@ -156,8 +155,10 @@ def main():
             confidence = np.max(preds) * 100
             prediction_color = class_colors[pred_class_index]
 
-            # Top row: Image | Prediction Confidence | Final Prediction
-            col1, col2, col3 = st.columns([1.2, 1.2, 1])
+            # ===========================
+            # Top row: Original Image | Prediction + Final
+            # ===========================
+            col1, col2 = st.columns([1.5, 1])
 
             with col1:
                 st.image(img, caption="Uploaded Image", use_column_width=True)
@@ -173,23 +174,24 @@ def main():
                     ax.text(v + 1, i, f"{v:.2f}%", va="center", fontsize=10)
                 st.pyplot(fig)
 
-            with col3:
                 st.markdown(
-                    f"<h2 style='color:{prediction_color}; font-size:34px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
+                    f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
                     unsafe_allow_html=True
                 )
                 st.markdown(
-                    f"<h4 style='font-size:24px'>Confidence: {confidence:.2f}%</h4>",
+                    f"<h4 style='font-size:20px'>Confidence: {confidence:.2f}%</h4>",
                     unsafe_allow_html=True
                 )
 
-        # Bottom row: Grad-CAM Overlay | Interpretation
+        # ===========================
+        # Bottom row: Grad-CAM | Heatmap interpretation
+        # ===========================
         st.subheader("🔥 Model Explanation")
         st.write("Grad-CAM overlay highlights the regions influencing the prediction:")
 
-        col4, col5 = st.columns([1.2, 1])
+        col3, col4 = st.columns([1.5, 1])
 
-        with col4:
+        with col3:
             heatmap = get_gradcam(img_array, model, pred_class_index)
             if heatmap is not None:
                 heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
@@ -203,13 +205,14 @@ def main():
             else:
                 st.warning("Could not generate Grad-CAM visualization")
 
-        with col5:
+        with col4:
             st.markdown("<h3 style='font-size:28px'>📝 Heatmap Interpretation</h3>", unsafe_allow_html=True)
             for color, text in explanation_for_class(pred_class):
                 st.markdown(
-                    f"<p style='font-size:22px'>- <b><span style='color:{color}'>{color.capitalize()}</span></b> → {text}</p>",
+                    f"<p style='font-size:20px'>- <b><span style='color:{color}'>&#9679;</span></b> {text}</p>",
                     unsafe_allow_html=True
                 )
+
     else:
         st.info("👆 Please upload a lung image to get started.")
 
