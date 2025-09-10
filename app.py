@@ -85,6 +85,36 @@ def get_gradcam(img_array, model, class_index):
     except:
         return None
 
+def explanation_for_class(pred_class):
+    """Dynamic Grad-CAM explanation depending on predicted class"""
+    explanations = {
+        "Healthy": [
+            ("🟢 Green areas", "Minimal model focus – normal lung background."),
+            ("🔵 Blue areas", "Regions with little diagnostic relevance."),
+            ("🟡 Yellow areas", "Slight model attention, but not strongly indicative."),
+            ("🔴 Red areas", "No abnormal hotspot detected in healthy prediction.")
+        ],
+        "Inflammation": [
+            ("🔴 Red areas", "Strong focus on inflamed tissue regions."),
+            ("🟡 Yellow areas", "Moderate influence, may indicate mild infection."),
+            ("🟢 Green areas", "Healthy lung tissue with minimal relevance."),
+            ("🔵 Blue areas", "Background or noise, low importance.")
+        ],
+        "Neoplastic": [
+            ("🔴 Red areas", "Strong attention to potential tumor-like regions."),
+            ("🟡 Yellow areas", "Possible secondary abnormal zones."),
+            ("🟢 Green areas", "Surrounding healthy tissue."),
+            ("🔵 Blue areas", "Least relevant parts of the scan.")
+        ],
+        "Undetermined": [
+            ("🔴 Red areas", "Model found uncertain abnormal regions."),
+            ("🟡 Yellow areas", "Possible mild influence."),
+            ("🟢 Green areas", "Healthy-like regions."),
+            ("🔵 Blue areas", "Ignored by the model.")
+        ]
+    }
+    return explanations.get(pred_class, [])
+
 def main():
     st.title("🫁 Lung Image Classification App")
     st.write("Upload a lung image to classify and visualize important regions.")
@@ -120,17 +150,17 @@ def main():
     # === Top Row ===
     col1, col2 = st.columns([1,1])
     with col1:
-        st.image(img, caption="Uploaded Lung Image", use_column_width=True)
+        st.image(img, caption="🩻 Uploaded Lung Image", use_column_width=True)
 
     with col2:
         st.subheader("📊 Prediction Confidence")
-        fig, ax = plt.subplots(figsize=(5,2.5))
+        fig, ax = plt.subplots(figsize=(5,3))
         ax.barh(class_names, preds*100, color=colors)
         ax.set_xlim([0,100])
-        ax.set_xlabel("Probability (%)", fontsize=11)
-        ax.set_title("Prediction Confidence", fontsize=13)
-        ax.tick_params(axis='y', labelsize=10)
-        ax.tick_params(axis='x', labelsize=10)
+        ax.set_xlabel("Probability (%)", fontsize=12)
+        ax.set_title("Prediction Confidence", fontsize=14)
+        ax.tick_params(axis='y', labelsize=11)
+        ax.tick_params(axis='x', labelsize=11)
         for i, v in enumerate(preds*100):
             ax.text(v+1, i, f"{v:.2f}%", va="center", fontsize=10)
         st.pyplot(fig)
@@ -141,7 +171,7 @@ def main():
             "blue" if pred_class=="Neoplastic" else
             "orange"
         )
-        st.markdown(f"<h2 style='color:{prediction_color}; font-size:24px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='color:{prediction_color}; font-size:26px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='font-size:18px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
 
     # === Bottom Row ===
@@ -154,12 +184,8 @@ def main():
 
     with col4:
         st.markdown("### 📝 Interpretation of Heatmap")
-        st.write("""
-        - The **colored regions** highlight areas most influential for the prediction.  
-        - **Red/yellow zones** = strongest influence.  
-        - **Blue/green zones** = weaker influence.  
-        - This helps identify whether the model is focusing on **clinically relevant lung areas**.  
-        """)
+        for color, text in explanation_for_class(pred_class):
+            st.markdown(f"- **<span style='color:{color}'>{color}</span>** → {text}", unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("🔬 For educational/research purposes. Consult healthcare professionals for medical diagnoses.")
