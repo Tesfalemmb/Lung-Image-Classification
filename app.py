@@ -141,7 +141,7 @@ def main():
     col_img, col_pred = st.columns([1.3, 1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        img_resized = np.array(img.resize((500, 500)).convert("RGB"))
+        img_resized = np.array(img.resize((500, 500)).convert("RGB"), dtype=np.uint8)
         st.image(img_resized, caption="Uploaded Image", use_container_width=False)
 
     with col_pred:
@@ -171,6 +171,7 @@ def main():
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
             superimposed_resized = cv2.resize(superimposed, (500, 500))
             superimposed_resized = cv2.cvtColor(superimposed_resized, cv2.COLOR_BGR2RGB)
+            superimposed_resized = superimposed_resized.astype(np.uint8)
             st.image(superimposed_resized, caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=False)
         else:
             st.warning("Grad-CAM could not be generated")
