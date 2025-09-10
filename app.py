@@ -153,26 +153,28 @@ def main():
         st.image(img, caption="🩻 Uploaded Lung Image", use_column_width=True)
 
     with col2:
-        st.subheader("📊 Prediction Confidence")
-        fig, ax = plt.subplots(figsize=(5,3))
-        ax.barh(class_names, preds*100, color=colors)
-        ax.set_xlim([0,100])
-        ax.set_xlabel("Probability (%)", fontsize=12)
-        ax.set_title("Prediction Confidence", fontsize=14)
-        ax.tick_params(axis='y', labelsize=11)
-        ax.tick_params(axis='x', labelsize=11)
-        for i, v in enumerate(preds*100):
-            ax.text(v+1, i, f"{v:.2f}%", va="center", fontsize=10)
-        st.pyplot(fig)
-
         prediction_color = (
-            "green" if pred_class=="Healthy" else
-            "red" if pred_class=="Inflammation" else
-            "blue" if pred_class=="Neoplastic" else
-            "orange"
-        )
-        st.markdown(f"<h2 style='color:{prediction_color}; font-size:26px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<h4 style='font-size:18px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
+    "green" if pred_class=="Healthy" else
+    "red" if pred_class=="Inflammation" else
+    "blue" if pred_class=="Neoplastic" else
+    "orange"
+)
+st.markdown(
+    f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: {pred_class}</h2>",
+    unsafe_allow_html=True
+)
+st.markdown(
+    f"<h4 style='font-size:22px'>Confidence: {confidence:.2f}%</h4>",
+    unsafe_allow_html=True
+)
+
+# --- inside col4 (Heatmap Interpretation) ---
+st.markdown("<h3 style='font-size:26px'>📝 Interpretation of Heatmap</h3>", unsafe_allow_html=True)
+for color, text in explanation_for_class(pred_class):
+    st.markdown(
+        f"<p style='font-size:20px'>- <b><span style='color:{color}'>{color}</span></b> → {text}</p>",
+        unsafe_allow_html=True
+    )
 
     # === Bottom Row ===
     st.markdown("---")
