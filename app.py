@@ -62,8 +62,9 @@ def load_model():
 # Load model
 model = load_model()
 
-# Define class names
+# Define class names and colors
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
+class_colors = ['green', 'red', 'blue', 'orange']
 
 def get_gradcam(img_array, model, class_index):
     """Generate Grad-CAM heatmap"""
@@ -175,17 +176,17 @@ def main():
                 col1, col2, col3 = st.columns([1.2, 1.2, 1])
 
                 with col1:
-                    st.image(img, caption="Uploaded Image", use_container_width=True)
+                    st.image(np.array(img), caption="Uploaded Image", use_container_width=True)
 
                 with col2:
                     st.subheader("📊 Prediction Confidence")
                     fig, ax = plt.subplots(figsize=(5, 3))
-                    ax.barh(class_names, preds * 100, color="skyblue")
+                    ax.barh(class_names, preds * 100, color=class_colors)
                     ax.set_xlim([0, 100])
                     ax.set_xlabel("Probability (%)")
                     ax.set_title("Prediction Confidence")
                     for i, v in enumerate(preds * 100):
-                        ax.text(v + 1, i, f"{v:.2f}%", va="center", fontsize=9)
+                        ax.text(v + 1, i, f"{v:.2f}%", va="center", fontsize=10)
                     st.pyplot(fig)
 
                 with col3:
@@ -193,12 +194,7 @@ def main():
                     pred_class = class_names[pred_class_index]
                     confidence = np.max(preds) * 100
 
-                    prediction_color = (
-                        "green" if pred_class=="Healthy" else
-                        "red" if pred_class=="Inflammation" else
-                        "blue" if pred_class=="Neoplastic" else
-                        "orange"
-                    )
+                    prediction_color = class_colors[pred_class_index]
                     st.markdown(
                         f"<h2 style='color:{prediction_color}; font-size:34px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
                         unsafe_allow_html=True
