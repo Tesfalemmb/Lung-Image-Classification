@@ -117,16 +117,12 @@ def main():
     else:
         superimposed_img = np.array(img.convert('RGB'))
 
-    # Display original and Grad-CAM side by side
-    col1, col2 = st.columns(2)
+    # === Top Row ===
+    col1, col2 = st.columns([1,1])
     with col1:
-        st.image(img, caption="Original Image", use_column_width=True)
-    with col2:
-        st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
+        st.image(img, caption="Uploaded Lung Image", use_column_width=True)
 
-    # Prediction chart + final result side by side
-    col1, col2 = st.columns(2)
-    with col1:
+    with col2:
         st.subheader("📊 Prediction Confidence")
         fig, ax = plt.subplots(figsize=(5,2.5))
         ax.barh(class_names, preds*100, color=colors)
@@ -139,15 +135,31 @@ def main():
             ax.text(v+1, i, f"{v:.2f}%", va="center", fontsize=10)
         st.pyplot(fig)
 
-    with col2:
         prediction_color = (
             "green" if pred_class=="Healthy" else
             "red" if pred_class=="Inflammation" else
             "blue" if pred_class=="Neoplastic" else
             "orange"
         )
-        st.markdown(f"<h2 style='color:{prediction_color}; font-size:28px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<h4 style='font-size:20px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='color:{prediction_color}; font-size:24px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='font-size:18px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
+
+    # === Bottom Row ===
+    st.markdown("---")
+    st.subheader("🔥 Model Explanation (Grad-CAM)")
+
+    col3, col4 = st.columns([1,1])
+    with col3:
+        st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
+
+    with col4:
+        st.markdown("### 📝 Interpretation of Heatmap")
+        st.write("""
+        - The **colored regions** highlight areas most influential for the prediction.  
+        - **Red/yellow zones** = strongest influence.  
+        - **Blue/green zones** = weaker influence.  
+        - This helps identify whether the model is focusing on **clinically relevant lung areas**.  
+        """)
 
     st.markdown("---")
     st.caption("🔬 For educational/research purposes. Consult healthcare professionals for medical diagnoses.")
