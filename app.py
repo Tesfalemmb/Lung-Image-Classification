@@ -138,7 +138,7 @@ def main():
     col_img, col_pred = st.columns([1.3, 1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        st.image(img.resize((500, 500)), caption="Uploaded Image", use_container_width=False)
+        st.image(img, caption="Uploaded Image", use_column_width=True)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -160,13 +160,13 @@ def main():
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
+            # Resize heatmap overlay to match original image
             heatmap_resized = cv2.resize(heatmap, (img.width, img.height))
             heatmap_resized = np.uint8(255 * heatmap_resized)
             heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
             img_np = np.array(img)
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
-            superimposed_resized = cv2.resize(superimposed, (500, 500))
-            st.image(Image.fromarray(superimposed_resized), caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=False)
+            st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=True)
         else:
             st.warning("Grad-CAM could not be generated")
 
