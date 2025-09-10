@@ -157,7 +157,7 @@ def main():
     # -------------------------
     col_heatmap, col_interpret = st.columns([1.3, 1])
     with col_heatmap:
-        st.subheader("🔥 Grad-CAM Overlay")
+        st.subheader("🔥 Grad-CAM Overlay") 
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
             heatmap_resized = cv2.resize(heatmap, (img.width, img.height))
