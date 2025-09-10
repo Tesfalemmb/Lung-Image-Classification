@@ -4,7 +4,6 @@ from PIL import Image
 import os
 import cv2
 import matplotlib.pyplot as plt
-import tensorflow as tf
 
 # -------------------------
 # Page configuration
@@ -15,25 +14,33 @@ st.set_page_config(
     layout="wide"
 )
 
-MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
+# TensorFlow check
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    st.error("TensorFlow not available. Please check requirements.txt.")
 
-# -------------------------
-# Load model with detection
-# -------------------------
+MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'
+
 @st.cache_resource
 def load_model():
-    if not os.path.exists(MODEL_PATH):
-        st.error(f"❌ Model file not found: {MODEL_PATH}")
-        return None, None
-
+    if not TENSORFLOW_AVAILABLE:
+        return None
     try:
-        model = tf.keras.models.load_model(MODEL_PATH)
-        return model, "full_model"
-    except Exception:
+        if not os.path.exists(MODEL_PATH):
+            st.error(f"❌ Model file not found at: {MODEL_PATH}")
+            return None
         try:
+            # Try loading as full model
+            model = tf.keras.models.load_model(MODEL_PATH)
+            return model
+        except Exception:
+            # Fallback: load base architecture + weights
             base_model = tf.keras.applications.EfficientNetB0(
                 include_top=False,
-                input_shape=(224,224,3),
+                input_shape=(224, 224, 3),
                 weights=None
             )
             x = base_model.output
@@ -43,37 +50,26 @@ def load_model():
             predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
             model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
             model.load_weights(MODEL_PATH)
-            return model, "weights_only"
-        except Exception as e:
-            st.error(f"❌ Could not load model: {e}")
-            return None, None
+            return model
+    except Exception as e:
+        st.error(f"❌ Error loading model: {str(e)}")
+        return None
 
-model, load_type = load_model()
-
-if model is not None:
-    if load_type == "full_model":
-        st.success("✅ Full model loaded successfully (architecture + weights)")
-    else:
-        st.warning("⚠️ Loaded weights-only model (architecture rebuilt manually)")
-
-# -------------------------
-# Classes
-# -------------------------
+model = load_model()
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 class_colors = ['green', 'red', 'blue', 'orange']
 
 # -------------------------
-# Preprocess image
+# Image preprocessing
 # -------------------------
 def preprocess_image(img: Image.Image):
-    img = img.convert("RGB")
-    img_resized = img.resize((224,224))
+    img_resized = img.resize((224, 224))
     img_array = np.expand_dims(np.array(img_resized), axis=0)
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     return img_array
 
 # -------------------------
-# Grad-CAM
+# Grad-CAM generation
 # -------------------------
 def get_gradcam(img_array, model, class_index):
     last_conv_layer = None
@@ -88,41 +84,34 @@ def get_gradcam(img_array, model, class_index):
                 break
     if last_conv_layer is None:
         return None
-
     grad_model = tf.keras.models.Model(
         inputs=model.inputs,
         outputs=[model.get_layer(last_conv_layer).output, model.output]
     )
-
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
         loss = predictions[:, class_index]
-
     grads = tape.gradient(loss, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
     conv_outputs = conv_outputs[0]
     heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
     heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
     return heatmap
 
-# -------------------------
-# Heatmap interpretation
-# -------------------------
 def heatmap_explanation():
     return [
         ("blue", "Low activation: minimal contribution to prediction."),
-        ("cyan", "Slight contribution: small influence."),
         ("green", "Moderate activation: moderate contribution."),
-        ("yellow", "High activation: strong influence."),
+        ("yellow", "Strong activation: significant contribution."),
         ("red", "Very high activation: strongest influence on prediction."),
     ]
 
 # -------------------------
-# Main app
+# Main App
 # -------------------------
 def main():
     st.title("🫁 Lung Image Classification App")
-    st.write("Upload a lung image to classify and visualize important regions.")
+    st.write("Upload a lung image to classify it and visualize important regions.")
 
     uploaded_file = st.file_uploader("Choose a lung image", type=["jpg","jpeg","png"])
     if uploaded_file is None:
@@ -147,12 +136,12 @@ def main():
     prediction_color = class_colors[pred_class_index]
 
     # -------------------------
-    # Top row: Image + Predictions
+    # Top row: Uploaded Image + Prediction
     # -------------------------
-    col_img, col_pred = st.columns([1.3,1])
+    col_img, col_pred = st.columns([1.3, 1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        st.image(img, caption="Uploaded Image", use_container_width=True)
+        st.image(np.array(img), caption="Uploaded Image", use_column_width=True)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -160,8 +149,8 @@ def main():
         ax.barh(class_names, preds*100, color=class_colors)
         ax.set_xlim([0,100])
         ax.set_xlabel("Probability (%)")
-        for i,v in enumerate(preds*100):
-            ax.text(v+1,i,f"{v:.2f}%",va='center', fontsize=12)
+        for i, v in enumerate(preds*100):
+            ax.text(v+1, i, f"{v:.2f}%", va='center', fontsize=12)
         st.pyplot(fig)
         st.markdown(f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='font-size:22px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
@@ -169,27 +158,25 @@ def main():
     # -------------------------
     # Bottom row: Grad-CAM + Interpretation
     # -------------------------
-    col_heatmap, col_interpret = st.columns([1.3,1])
+    col_heatmap, col_interpret = st.columns([1.3, 1])
     with col_heatmap:
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
             heatmap_resized = cv2.resize(heatmap, (img.width, img.height))
-            heatmap_resized = np.uint8(255*heatmap_resized)
+            heatmap_resized = np.uint8(255 * heatmap_resized)
             heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
             img_np = np.array(img)
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
-            superimposed = cv2.cvtColor(superimposed, cv2.COLOR_BGR2RGB)
-            st.image(superimposed, caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=True)
+            st.image(np.array(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=True)
         else:
             st.warning("Grad-CAM could not be generated")
 
     with col_interpret:
         st.subheader("📝 Heatmap Interpretation")
-        # Push interpretation down for alignment with heatmap
-        st.markdown("<div style='margin-top:40px; font-size:20px'>Colors indicate influence on the model's decision:</div>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:20px'>Colors indicate influence on the model's decision:</p>", unsafe_allow_html=True)
         for color, text in heatmap_explanation():
-            st.markdown(f"<p style='font-size:18px'>- <span style='color:{color}'>●</span> {text}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size:20px'>- <span style='color:{color}'>●</span> {text}</p>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("🔬 For educational and research purposes. Consult healthcare professionals for medical diagnoses.")
