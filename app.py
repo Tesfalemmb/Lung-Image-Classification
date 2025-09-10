@@ -97,10 +97,13 @@ def get_gradcam(img_array, model, class_index):
     return heatmap
 
 def heatmap_explanation():
+    # Full color gradient explanation
     return [
         ("blue", "Low activation: minimal contribution to prediction."),
+        ("cyan", "Slight contribution: small influence on prediction."),
         ("green", "Moderate activation: moderate contribution."),
-        ("red", "High activation: strong influence on prediction."),
+        ("yellow", "High contribution: strong influence on prediction."),
+        ("red", "Very high activation: strongest influence on prediction."),
     ]
 
 # -------------------------
