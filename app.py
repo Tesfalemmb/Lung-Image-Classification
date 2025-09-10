@@ -4,7 +4,6 @@ from PIL import Image
 import os
 import cv2
 import matplotlib.pyplot as plt
-from io import BytesIO
 
 # Page configuration
 st.set_page_config(
@@ -105,7 +104,8 @@ def main():
         st.info("👆 Upload a lung image to get started.")
         return
 
-    img = Image.open(BytesIO(uploaded_file.read())).convert("RGB")
+    # Use uploaded_file directly to avoid stream errors
+    img = Image.open(uploaded_file).convert("RGB")
 
     if model is None:
         st.error("Model failed to load. Check the model file.")
@@ -119,7 +119,7 @@ def main():
     prediction_color = class_colors[pred_class_index]
 
     # -------------------------
-    # Top row: Uploaded Image + Prediction + Final
+    # Top row: Uploaded Image + Prediction
     # -------------------------
     col_img, col_pred = st.columns([1.3, 1])
     with col_img:
@@ -146,7 +146,7 @@ def main():
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
-            # Resize overlay dynamically to uploaded image width
+            # Resize overlay to uploaded image width (responsive)
             img_width = img.width
             img_height = img.height
             heatmap_resized = cv2.resize(heatmap, (img_width, img_height))
