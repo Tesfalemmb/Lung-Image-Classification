@@ -126,15 +126,15 @@ def main():
     with col_img:
         st.subheader("🖼️ Uploaded Image & Grad-CAM")
         # Uploaded Image
-        st.image(img.resize((500, 500)), caption="Uploaded Image", use_column_width=False)
+        st.image(img.resize((700, 700)), caption="Uploaded Image", use_column_width=False)
         # Grad-CAM overlay
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
             heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
             heatmap = np.uint8(255 * heatmap)
             heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-            img_np = np.array(img.resize((500,500)))
-            superimposed = cv2.addWeighted(img_np, 0.6, cv2.resize(heatmap,(500,500)), 0.4, 0)
+            img_np = np.array(img.resize((700,700)))
+            superimposed = cv2.addWeighted(img_np, 0.6, cv2.resize(heatmap,(700,700)), 0.4, 0)
             st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=False)
         else:
             st.warning("Grad-CAM could not be generated")
@@ -148,7 +148,7 @@ def main():
         for i, v in enumerate(preds*100):
             ax.text(v+1, i, f"{v:.2f}%", va='center', fontsize=10)
         st.pyplot(fig)
-        st.markdown(f"<h2 style='color:{prediction_color}; font-size:30px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='font-size:20px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
 
         # Heatmap interpretation bullets
