@@ -4,6 +4,7 @@ from PIL import Image
 import os
 import cv2
 import matplotlib.pyplot as plt
+import requests
 
 # -------------------------
 # Page configuration
@@ -22,24 +23,47 @@ except ImportError:
     TENSORFLOW_AVAILABLE = False
     st.error("TensorFlow not available. Please check requirements.txt.")
 
-# Use your existing model
-MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
+# -------------------------
+# Model path and download
+# -------------------------
+MODEL_FILENAME = "lung_classification_model_efficientnetb0.h5"
+MODEL_URL = "https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/<REPO_NAME>/main/{}".format(MODEL_FILENAME)
 
+def ensure_model_exists():
+    if not os.path.exists(MODEL_FILENAME):
+        st.warning(f"Model file not found locally. Downloading from GitHub...")
+        try:
+            r = requests.get(MODEL_URL, stream=True)
+            if r.status_code == 200:
+                with open(MODEL_FILENAME, 'wb') as f:
+                    f.write(r.content)
+                st.success("✅ Model downloaded successfully!")
+            else:
+                st.error(f"❌ Could not download model. Status code: {r.status_code}")
+                return False
+        except Exception as e:
+            st.error(f"❌ Error downloading model: {e}")
+            return False
+    return True
+
+# -------------------------
+# Load model
+# -------------------------
 @st.cache_resource
 def load_model():
     if not TENSORFLOW_AVAILABLE:
         return None
-    if not os.path.exists(MODEL_PATH):
-        st.error(f"❌ Model file not found: {MODEL_PATH}")
+    if not ensure_model_exists():
         return None
     try:
-        model = tf.keras.models.load_model(MODEL_PATH)
+        model = tf.keras.models.load_model(MODEL_FILENAME)
         return model
     except Exception as e:
-        st.error(f"❌ Error loading model: {str(e)}")
+        st.error(f"❌ Error loading model: {e}")
         return None
 
 model = load_model()
+
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 class_colors = ['green', 'red', 'blue', 'orange']
 
