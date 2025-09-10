@@ -119,15 +119,31 @@ def main():
     prediction_color = class_colors[pred_class_index]
 
     # -------------------------
-    # Top row: Images | Prediction + Interpretation
+    # Top row: Uploaded Image + Prediction + Final
     # -------------------------
     col_img, col_pred = st.columns([1.3, 1])
-
     with col_img:
-        st.subheader("🖼️ Uploaded Image & Grad-CAM")
-        # Uploaded Image
+        st.subheader("🖼️ Uploaded Image")
         st.image(img.resize((700, 700)), caption="Uploaded Image", use_column_width=False)
-        # Grad-CAM overlay
+
+    with col_pred:
+        st.subheader("📊 Prediction Confidence")
+        fig, ax = plt.subplots(figsize=(5,4))
+        ax.barh(class_names, preds*100, color=class_colors)
+        ax.set_xlim([0,100])
+        ax.set_xlabel("Probability (%)")
+        for i, v in enumerate(preds*100):
+            ax.text(v+1, i, f"{v:.2f}%", va='center', fontsize=12)
+        st.pyplot(fig)
+        st.markdown(f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='font-size:22px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
+
+    # -------------------------
+    # Bottom row: Grad-CAM + Interpretation
+    # -------------------------
+    col_heatmap, col_interpret = st.columns([1.3, 1])
+    with col_heatmap:
+        st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
             heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
@@ -139,23 +155,11 @@ def main():
         else:
             st.warning("Grad-CAM could not be generated")
 
-    with col_pred:
-        st.subheader("📊 Prediction Confidence")
-        fig, ax = plt.subplots(figsize=(5,4))
-        ax.barh(class_names, preds*100, color=class_colors)
-        ax.set_xlim([0,100])
-        ax.set_xlabel("Probability (%)")
-        for i, v in enumerate(preds*100):
-            ax.text(v+1, i, f"{v:.2f}%", va='center', fontsize=10)
-        st.pyplot(fig)
-        st.markdown(f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<h4 style='font-size:20px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
-
-        # Heatmap interpretation bullets
+    with col_interpret:
         st.subheader("📝 Heatmap Interpretation")
-        st.markdown("<p style='font-size:18px'>Color intensity explains influence on prediction:</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:20px'>Colors indicate influence on the model's decision:</p>", unsafe_allow_html=True)
         for color, text in heatmap_explanation():
-            st.markdown(f"<p style='font-size:18px'>- <span style='color:{color}'>●</span> {text}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size:20px'>- <span style='color:{color}'>●</span> {text}</p>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("🔬 For educational and research purposes. Consult healthcare professionals for medical diagnoses.")
