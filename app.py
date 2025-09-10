@@ -104,26 +104,11 @@ def get_gradcam(img_array, model, class_index):
         return None
 
 def explanation_for_class(pred_class):
-    if pred_class == "Healthy":
-        return [
-            ("green", "Minimal abnormal activations observed."),
-            ("green", "Lung tissue looks consistent with healthy patterns."),
-        ]
-    elif pred_class == "Inflammation":
-        return [
-            ("red", "Highlighted regions suggest inflamed tissue."),
-            ("red", "Possible infection or irritation detected."),
-        ]
-    elif pred_class == "Neoplastic":
-        return [
-            ("blue", "Model detected irregular growth patterns."),
-            ("blue", "May indicate tumor or neoplastic changes."),
-        ]
-    else:
-        return [
-            ("orange", "Model uncertain about the affected regions."),
-            ("orange", "Further examination is recommended."),
-        ]
+    return [
+        ("blue", "Low activation: areas that contributed minimally."),
+        ("green", "Moderate activation: areas with moderate influence."),
+        ("red", "High activation: regions that strongly influenced the model's decision.")
+    ]
 
 def main():
     st.title("🫁 Lung Image Classification App")
@@ -158,14 +143,14 @@ def main():
             # ===========================
             # Top row: Original Image | Prediction + Final
             # ===========================
-            col1, col2 = st.columns([1.5, 1])
+            col1, col2 = st.columns([1.2, 1])
 
             with col1:
-                st.image(img, caption="Uploaded Image", use_column_width=True)
+                st.image(img.resize((350, 350)), caption="Uploaded Image", use_column_width=False)
 
             with col2:
                 st.subheader("📊 Prediction Confidence")
-                fig, ax = plt.subplots(figsize=(5, 3))
+                fig, ax = plt.subplots(figsize=(4, 3))
                 ax.barh(class_names, preds * 100, color=class_colors)
                 ax.set_xlim([0, 100])
                 ax.set_xlabel("Probability (%)")
@@ -175,11 +160,11 @@ def main():
                 st.pyplot(fig)
 
                 st.markdown(
-                    f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
+                    f"<h2 style='color:{prediction_color}; font-size:28px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
                     unsafe_allow_html=True
                 )
                 st.markdown(
-                    f"<h4 style='font-size:20px'>Confidence: {confidence:.2f}%</h4>",
+                    f"<h4 style='font-size:18px'>Confidence: {confidence:.2f}%</h4>",
                     unsafe_allow_html=True
                 )
 
@@ -189,7 +174,7 @@ def main():
         st.subheader("🔥 Model Explanation")
         st.write("Grad-CAM overlay highlights the regions influencing the prediction:")
 
-        col3, col4 = st.columns([1.5, 1])
+        col3, col4 = st.columns([1.2, 1])
 
         with col3:
             heatmap = get_gradcam(img_array, model, pred_class_index)
@@ -198,18 +183,20 @@ def main():
                 heatmap = np.uint8(255 * heatmap)
                 heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
-                img_np = np.array(img)
-                superimposed_img = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
+                img_np = np.array(img.resize((350, 350)))
+                heatmap_small = cv2.resize(heatmap, (350, 350))
+                superimposed_img = cv2.addWeighted(img_np, 0.6, heatmap_small, 0.4, 0)
                 superimposed_img_pil = Image.fromarray(superimposed_img)
-                st.image(superimposed_img_pil, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
+                st.image(superimposed_img_pil, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=False)
             else:
                 st.warning("Could not generate Grad-CAM visualization")
 
         with col4:
-            st.markdown("<h3 style='font-size:28px'>📝 Heatmap Interpretation</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='font-size:26px'>📝 Heatmap Interpretation</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:18px'>Colors indicate influence on the model's decision:</p>", unsafe_allow_html=True)
             for color, text in explanation_for_class(pred_class):
                 st.markdown(
-                    f"<p style='font-size:20px'>- <b><span style='color:{color}'>&#9679;</span></b> {text}</p>",
+                    f"<p style='font-size:18px'>- <span style='color:{color}'>●</span> {text}</p>",
                     unsafe_allow_html=True
                 )
 
