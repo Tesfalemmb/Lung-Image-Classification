@@ -5,14 +5,18 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 
+# -------------------------
 # Page configuration
+# -------------------------
 st.set_page_config(
     page_title="Lung Classification App",
     page_icon="🫁",
     layout="wide"
 )
 
+# -------------------------
 # TensorFlow check
+# -------------------------
 try:
     import tensorflow as tf
     TENSORFLOW_AVAILABLE = True
@@ -51,16 +55,25 @@ def load_model():
         st.error(f"❌ Error loading model: {str(e)}")
         return None
 
+# -------------------------
+# Load model
+# -------------------------
 model = load_model()
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 class_colors = ['green', 'red', 'blue', 'orange']
 
+# -------------------------
+# Image preprocessing
+# -------------------------
 def preprocess_image(img):
     img_resized = img.resize((224, 224))
     img_array = np.expand_dims(np.array(img_resized), axis=0)
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     return img_array
 
+# -------------------------
+# Grad-CAM generation
+# -------------------------
 def get_gradcam(img_array, model, class_index):
     last_conv_layer = None
     for layer in reversed(model.layers):
@@ -88,6 +101,9 @@ def get_gradcam(img_array, model, class_index):
     heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
     return heatmap
 
+# -------------------------
+# Heatmap explanation bullets
+# -------------------------
 def heatmap_explanation():
     return [
         ("blue", "Low activation: minimal contribution to prediction."),
@@ -95,22 +111,31 @@ def heatmap_explanation():
         ("red", "High activation: strong influence on prediction."),
     ]
 
+# -------------------------
+# Main App
+# -------------------------
 def main():
     st.title("🫁 Lung Image Classification App")
     st.write("Upload a lung image to classify it and visualize important regions.")
 
+    # -------------------------
+    # File uploader
+    # -------------------------
     uploaded_file = st.file_uploader("Choose a lung image", type=["jpg","jpeg","png"])
     if uploaded_file is None:
         st.info("👆 Upload a lung image to get started.")
         return
 
-    # Use uploaded_file directly to avoid stream errors
+    # ✅ Correctly open uploaded file
     img = Image.open(uploaded_file).convert("RGB")
 
     if model is None:
         st.error("Model failed to load. Check the model file.")
         return
 
+    # -------------------------
+    # Preprocess and predict
+    # -------------------------
     img_array = preprocess_image(img)
     preds = model.predict(img_array, verbose=0)[0]
     pred_class_index = np.argmax(preds)
@@ -146,7 +171,6 @@ def main():
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
-            # Resize overlay to uploaded image width (responsive)
             img_width = img.width
             img_height = img.height
             heatmap_resized = cv2.resize(heatmap, (img_width, img_height))
