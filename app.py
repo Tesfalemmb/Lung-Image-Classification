@@ -15,9 +15,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# -------------------------
-# Model path
-# -------------------------
 MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
 
 # -------------------------
@@ -30,16 +27,13 @@ def load_model():
         return None, None
 
     try:
-        # Try loading full model
         model = tf.keras.models.load_model(MODEL_PATH)
-        load_type = "full_model"
-        return model, load_type
+        return model, "full_model"
     except Exception:
-        # Fallback: rebuild architecture and load weights-only
         try:
             base_model = tf.keras.applications.EfficientNetB0(
                 include_top=False,
-                input_shape=(224,224,3),  # RGB input
+                input_shape=(224,224,3),
                 weights=None
             )
             x = base_model.output
@@ -49,21 +43,18 @@ def load_model():
             predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
             model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
             model.load_weights(MODEL_PATH)
-            load_type = "weights_only"
-            return model, load_type
+            return model, "weights_only"
         except Exception as e:
             st.error(f"❌ Could not load model: {e}")
             return None, None
 
-# Load model
 model, load_type = load_model()
 
-# Display which type is loaded
 if model is not None:
     if load_type == "full_model":
         st.success("✅ Full model loaded successfully (architecture + weights)")
     else:
-        st.warning("⚠️ Full model could not be loaded. Using weights-only")
+        st.warning("⚠️ Loaded weights-only model (architecture rebuilt manually)")
 
 # -------------------------
 # Classes
@@ -161,7 +152,7 @@ def main():
     col_img, col_pred = st.columns([1.3,1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        st.image(img.resize((600,600)), caption="Uploaded Image", use_column_width=False)
+        st.image(img, caption="Uploaded Image", use_container_width=True)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -188,15 +179,15 @@ def main():
             heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
             img_np = np.array(img)
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
-            superimposed_resized = cv2.resize(superimposed, (600,600))
-            superimposed_resized = cv2.cvtColor(superimposed_resized, cv2.COLOR_BGR2RGB)
-            st.image(superimposed_resized, caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=False)
+            superimposed = cv2.cvtColor(superimposed, cv2.COLOR_BGR2RGB)
+            st.image(superimposed, caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=True)
         else:
             st.warning("Grad-CAM could not be generated")
 
     with col_interpret:
         st.subheader("📝 Heatmap Interpretation")
-        st.markdown("<div style='margin-top:60px; font-size:20px'>Colors indicate influence on the model's decision:</div>", unsafe_allow_html=True)
+        # Push interpretation down for alignment with heatmap
+        st.markdown("<div style='margin-top:40px; font-size:20px'>Colors indicate influence on the model's decision:</div>", unsafe_allow_html=True)
         for color, text in heatmap_explanation():
             st.markdown(f"<p style='font-size:18px'>- <span style='color:{color}'>●</span> {text}</p>", unsafe_allow_html=True)
 
