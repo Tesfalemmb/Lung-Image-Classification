@@ -6,7 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 from io import BytesIO
 
-# Set page configuration
+# Page configuration
 st.set_page_config(
     page_title="Lung Classification App",
     page_icon="🫁",
@@ -21,7 +21,7 @@ except ImportError:
     TENSORFLOW_AVAILABLE = False
     st.error("TensorFlow not available. Please check requirements.txt.")
 
-# Load your trained model
+# Model path
 MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'
 
 @st.cache_resource
@@ -58,6 +58,17 @@ model = load_model()
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 class_colors = ['green', 'red', 'blue', 'orange']
 
+def preprocess_image(img):
+    try:
+        img_resized = img.resize((224, 224))
+        img_array = np.array(img_resized)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
+        return img_array
+    except Exception as e:
+        st.error(f"Error preprocessing image: {str(e)}")
+        return None
+
 def get_gradcam(img_array, model, class_index):
     if model is None:
         return None
@@ -90,17 +101,6 @@ def get_gradcam(img_array, model, class_index):
         heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
         return heatmap
     except Exception:
-        return None
-
-def preprocess_image(img):
-    try:
-        img_resized = img.resize((224, 224))
-        img_array = np.array(img_resized)
-        img_array = np.expand_dims(img_array, axis=0)
-        img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
-        return img_array
-    except Exception as e:
-        st.error(f"Error preprocessing image: {str(e)}")
         return None
 
 def explanation_for_class(pred_class):
@@ -136,78 +136,80 @@ def main():
     )
 
     if uploaded_file is not None:
-        # ✅ Cloud-safe read
+        # Cloud-safe read
         uploaded_bytes = uploaded_file.read()
         img = Image.open(BytesIO(uploaded_bytes)).convert("RGB")
 
         if model is None:
             st.error("Model failed to load. Please check the model file.")
-        else:
-            with st.spinner("🔄 Processing image..."):
-                img_array = preprocess_image(img)
-                if img_array is None:
-                    st.error("Failed to process image")
-                    return
+            return
 
-                preds = model.predict(img_array, verbose=0)[0]
+        with st.spinner("🔄 Processing image..."):
+            img_array = preprocess_image(img)
+            if img_array is None:
+                st.error("Failed to process image")
+                return
 
-                # Top row: Image | Prediction Confidence | Final Prediction
-                col1, col2, col3 = st.columns([1.2, 1.2, 1])
+            preds = model.predict(img_array, verbose=0)[0]
+            pred_class_index = np.argmax(preds)
+            pred_class = class_names[pred_class_index]
+            confidence = np.max(preds) * 100
+            prediction_color = class_colors[pred_class_index]
 
-                with col1:
-                    st.image(np.array(img), caption="Uploaded Image", use_container_width=True)
+            # Top row: Image | Prediction Confidence | Final Prediction
+            col1, col2, col3 = st.columns([1.2, 1.2, 1])
 
-                with col2:
-                    st.subheader("📊 Prediction Confidence")
-                    fig, ax = plt.subplots(figsize=(5, 3))
-                    ax.barh(class_names, preds * 100, color=class_colors)
-                    ax.set_xlim([0, 100])
-                    ax.set_xlabel("Probability (%)")
-                    ax.set_title("Prediction Confidence")
-                    for i, v in enumerate(preds * 100):
-                        ax.text(v + 1, i, f"{v:.2f}%", va="center", fontsize=10)
-                    st.pyplot(fig)
+            with col1:
+                st.image(img, caption="Uploaded Image", use_column_width=True)
 
-                with col3:
-                    pred_class_index = np.argmax(preds)
-                    pred_class = class_names[pred_class_index]
-                    confidence = np.max(preds) * 100
-                    prediction_color = class_colors[pred_class_index]
-                    st.markdown(
-                        f"<h2 style='color:{prediction_color}; font-size:34px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<h4 style='font-size:24px'>Confidence: {confidence:.2f}%</h4>",
-                        unsafe_allow_html=True
-                    )
+            with col2:
+                st.subheader("📊 Prediction Confidence")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                ax.barh(class_names, preds * 100, color=class_colors)
+                ax.set_xlim([0, 100])
+                ax.set_xlabel("Probability (%)")
+                ax.set_title("Prediction Confidence")
+                for i, v in enumerate(preds * 100):
+                    ax.text(v + 1, i, f"{v:.2f}%", va="center", fontsize=10)
+                st.pyplot(fig)
 
-            # Bottom row: Grad-CAM Overlay | Interpretation
-            st.subheader("🔥 Model Explanation")
-            st.write("Grad-CAM overlay highlights the regions influencing the prediction:")
+            with col3:
+                st.markdown(
+                    f"<h2 style='color:{prediction_color}; font-size:34px'>✅ Final Prediction: <b>{pred_class}</b></h2>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f"<h4 style='font-size:24px'>Confidence: {confidence:.2f}%</h4>",
+                    unsafe_allow_html=True
+                )
 
-            col4, col5 = st.columns([1.2, 1])
+        # Bottom row: Grad-CAM Overlay | Interpretation
+        st.subheader("🔥 Model Explanation")
+        st.write("Grad-CAM overlay highlights the regions influencing the prediction:")
 
-            with col4:
-                heatmap = get_gradcam(img_array, model, pred_class_index)
-                if heatmap is not None:
-                    heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
-                    heatmap = np.uint8(255 * heatmap)
-                    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+        col4, col5 = st.columns([1.2, 1])
 
-                    img_np = np.array(img)
-                    superimposed_img = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
-                    st.image(superimposed_img, caption=f"Grad-CAM Overlay for {pred_class}", use_container_width=True)
-                else:
-                    st.warning("Could not generate Grad-CAM visualization")
+        with col4:
+            heatmap = get_gradcam(img_array, model, pred_class_index)
+            if heatmap is not None:
+                heatmap = cv2.resize(heatmap, (img.size[0], img.size[1]))
+                heatmap = np.uint8(255 * heatmap)
+                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
-            with col5:
-                st.markdown("<h3 style='font-size:28px'>📝 Heatmap Interpretation</h3>", unsafe_allow_html=True)
-                for color, text in explanation_for_class(pred_class):
-                    st.markdown(
-                        f"<p style='font-size:22px'>- <b><span style='color:{color}'>{color.capitalize()}</span></b> → {text}</p>",
-                        unsafe_allow_html=True
-                    )
+                img_np = np.array(img)
+                superimposed_img = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
+                superimposed_img_pil = Image.fromarray(superimposed_img)
+                st.image(superimposed_img_pil, caption=f"Grad-CAM Overlay for {pred_class}", use_column_width=True)
+            else:
+                st.warning("Could not generate Grad-CAM visualization")
+
+        with col5:
+            st.markdown("<h3 style='font-size:28px'>📝 Heatmap Interpretation</h3>", unsafe_allow_html=True)
+            for color, text in explanation_for_class(pred_class):
+                st.markdown(
+                    f"<p style='font-size:22px'>- <b><span style='color:{color}'>{color.capitalize()}</span></b> → {text}</p>",
+                    unsafe_allow_html=True
+                )
     else:
         st.info("👆 Please upload a lung image to get started.")
 
