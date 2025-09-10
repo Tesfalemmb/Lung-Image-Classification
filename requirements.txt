@@ -1,5 +1,6 @@
-streamlit==1.38.0
-tensorflow==2.20.0
+tensorflow==2.14.1
+streamlit
 numpy
 pillow
 opencv-python-headless
+matplotlib
