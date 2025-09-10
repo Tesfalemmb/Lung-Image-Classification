@@ -4,7 +4,7 @@ from PIL import Image
 import os
 import cv2
 import matplotlib.pyplot as plt
-import requests
+import tensorflow as tf
 
 # -------------------------
 # Page configuration
@@ -15,69 +15,63 @@ st.set_page_config(
     layout="wide"
 )
 
-# TensorFlow check
-try:
-    import tensorflow as tf
-    TENSORFLOW_AVAILABLE = True
-except ImportError:
-    TENSORFLOW_AVAILABLE = False
-    st.error("TensorFlow not available. Please check requirements.txt.")
-
 # -------------------------
-# Model path and download
+# Model path
 # -------------------------
-MODEL_FILENAME = "lung_classification_model_efficientnetb0.h5"
-MODEL_URL = "https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/<REPO_NAME>/main/{}".format(MODEL_FILENAME)
-
-def ensure_model_exists():
-    if not os.path.exists(MODEL_FILENAME):
-        st.warning(f"Model file not found locally. Downloading from GitHub...")
-        try:
-            r = requests.get(MODEL_URL, stream=True)
-            if r.status_code == 200:
-                with open(MODEL_FILENAME, 'wb') as f:
-                    f.write(r.content)
-                st.success("✅ Model downloaded successfully!")
-            else:
-                st.error(f"❌ Could not download model. Status code: {r.status_code}")
-                return False
-        except Exception as e:
-            st.error(f"❌ Error downloading model: {e}")
-            return False
-    return True
+MODEL_PATH = "lung_classification_model_efficientnetb0.h5"
 
 # -------------------------
 # Load model
 # -------------------------
 @st.cache_resource
 def load_model():
-    if not TENSORFLOW_AVAILABLE:
-        return None
-    if not ensure_model_exists():
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"❌ Model file not found: {MODEL_PATH}")
         return None
     try:
-        model = tf.keras.models.load_model(MODEL_FILENAME)
+        # Try loading full model
+        model = tf.keras.models.load_model(MODEL_PATH)
         return model
-    except Exception as e:
-        st.error(f"❌ Error loading model: {e}")
-        return None
+    except Exception:
+        # If full model fails, rebuild architecture and load weights-only
+        try:
+            base_model = tf.keras.applications.EfficientNetB0(
+                include_top=False,
+                input_shape=(224,224,3),  # MUST be 3 channels
+                weights=None
+            )
+            x = base_model.output
+            x = tf.keras.layers.GlobalAveragePooling2D()(x)
+            x = tf.keras.layers.Dense(128, activation='relu')(x)
+            x = tf.keras.layers.Dropout(0.5)(x)
+            predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
+            model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
+            model.load_weights(MODEL_PATH)
+            return model
+        except Exception as e:
+            st.error(f"❌ Could not load model: {e}")
+            return None
 
 model = load_model()
 
+# -------------------------
+# Classes
+# -------------------------
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 class_colors = ['green', 'red', 'blue', 'orange']
 
 # -------------------------
-# Image preprocessing
+# Preprocess image
 # -------------------------
 def preprocess_image(img: Image.Image):
-    img_resized = img.resize((224, 224))
+    img = img.convert("RGB")
+    img_resized = img.resize((224,224))
     img_array = np.expand_dims(np.array(img_resized), axis=0)
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     return img_array
 
 # -------------------------
-# Grad-CAM generation
+# Grad-CAM
 # -------------------------
 def get_gradcam(img_array, model, class_index):
     last_conv_layer = None
@@ -97,11 +91,13 @@ def get_gradcam(img_array, model, class_index):
         inputs=model.inputs,
         outputs=[model.get_layer(last_conv_layer).output, model.output]
     )
+
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
         loss = predictions[:, class_index]
+
     grads = tape.gradient(loss, conv_outputs)
-    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
     conv_outputs = conv_outputs[0]
     heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
     heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
@@ -113,18 +109,18 @@ def get_gradcam(img_array, model, class_index):
 def heatmap_explanation():
     return [
         ("blue", "Low activation: minimal contribution to prediction."),
-        ("cyan", "Slight contribution: small influence on prediction."),
+        ("cyan", "Slight contribution: small influence."),
         ("green", "Moderate activation: moderate contribution."),
-        ("yellow", "High contribution: strong influence on prediction."),
+        ("yellow", "High activation: strong influence."),
         ("red", "Very high activation: strongest influence on prediction."),
     ]
 
 # -------------------------
-# Main App
+# Main app
 # -------------------------
 def main():
     st.title("🫁 Lung Image Classification App")
-    st.write("Upload a lung image to classify it and visualize important regions.")
+    st.write("Upload a lung image to classify and visualize important regions.")
 
     uploaded_file = st.file_uploader("Choose a lung image", type=["jpg","jpeg","png"])
     if uploaded_file is None:
@@ -149,13 +145,12 @@ def main():
     prediction_color = class_colors[pred_class_index]
 
     # -------------------------
-    # Top row: Uploaded Image + Prediction
+    # Top row: Image + Predictions
     # -------------------------
-    col_img, col_pred = st.columns([1.3, 1])
+    col_img, col_pred = st.columns([1.3,1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        img_resized = np.array(img.resize((500, 500)).convert("RGB"), dtype=np.uint8)
-        st.image(img_resized, caption="Uploaded Image", use_column_width=False)
+        st.image(img.resize((500,500)), caption="Uploaded Image", use_column_width=False)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -163,8 +158,8 @@ def main():
         ax.barh(class_names, preds*100, color=class_colors)
         ax.set_xlim([0,100])
         ax.set_xlabel("Probability (%)")
-        for i, v in enumerate(preds*100):
-            ax.text(v+1, i, f"{v:.2f}%", va='center', fontsize=12)
+        for i,v in enumerate(preds*100):
+            ax.text(v+1,i,f"{v:.2f}%",va='center', fontsize=12)
         st.pyplot(fig)
         st.markdown(f"<h2 style='color:{prediction_color}; font-size:32px'>✅ Final Prediction: {pred_class}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='font-size:22px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
@@ -172,17 +167,17 @@ def main():
     # -------------------------
     # Bottom row: Grad-CAM + Interpretation
     # -------------------------
-    col_heatmap, col_interpret = st.columns([1.3, 1])
+    col_heatmap, col_interpret = st.columns([1.3,1])
     with col_heatmap:
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
             heatmap_resized = cv2.resize(heatmap, (img.width, img.height))
-            heatmap_resized = np.uint8(255 * heatmap_resized)
+            heatmap_resized = np.uint8(255*heatmap_resized)
             heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
             img_np = np.array(img)
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
-            superimposed_resized = cv2.resize(superimposed, (500, 500))
+            superimposed_resized = cv2.resize(superimposed, (500,500))
             superimposed_resized = cv2.cvtColor(superimposed_resized, cv2.COLOR_BGR2RGB)
             st.image(superimposed_resized, caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=False)
         else:
