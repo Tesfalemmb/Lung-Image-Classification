@@ -14,9 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# -------------------------
 # TensorFlow check
-# -------------------------
 try:
     import tensorflow as tf
     TENSORFLOW_AVAILABLE = True
@@ -55,9 +53,6 @@ def load_model():
         st.error(f"❌ Error loading model: {str(e)}")
         return None
 
-# -------------------------
-# Load model
-# -------------------------
 model = load_model()
 class_names = ['Healthy', 'Inflammation', 'Neoplastic', 'Undetermined']
 class_colors = ['green', 'red', 'blue', 'orange']
@@ -65,7 +60,7 @@ class_colors = ['green', 'red', 'blue', 'orange']
 # -------------------------
 # Image preprocessing
 # -------------------------
-def preprocess_image(img):
+def preprocess_image(img: Image.Image):
     img_resized = img.resize((224, 224))
     img_array = np.expand_dims(np.array(img_resized), axis=0)
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
@@ -101,9 +96,6 @@ def get_gradcam(img_array, model, class_index):
     heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
     return heatmap
 
-# -------------------------
-# Heatmap explanation bullets
-# -------------------------
 def heatmap_explanation():
     return [
         ("blue", "Low activation: minimal contribution to prediction."),
@@ -118,24 +110,21 @@ def main():
     st.title("🫁 Lung Image Classification App")
     st.write("Upload a lung image to classify it and visualize important regions.")
 
-    # -------------------------
-    # File uploader
-    # -------------------------
     uploaded_file = st.file_uploader("Choose a lung image", type=["jpg","jpeg","png"])
     if uploaded_file is None:
         st.info("👆 Upload a lung image to get started.")
         return
 
-    # ✅ Correctly open uploaded file
-    img = Image.open(uploaded_file).convert("RGB")
+    try:
+        img = Image.open(uploaded_file).convert("RGB")
+    except Exception as e:
+        st.error(f"❌ Cannot open image: {str(e)}")
+        return
 
     if model is None:
         st.error("Model failed to load. Check the model file.")
         return
 
-    # -------------------------
-    # Preprocess and predict
-    # -------------------------
     img_array = preprocess_image(img)
     preds = model.predict(img_array, verbose=0)[0]
     pred_class_index = np.argmax(preds)
@@ -149,7 +138,7 @@ def main():
     col_img, col_pred = st.columns([1.3, 1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        st.image(img, caption="Uploaded Image", use_container_width=True)
+        st.image(img, caption="Uploaded Image", use_column_width=True)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -164,21 +153,20 @@ def main():
         st.markdown(f"<h4 style='font-size:22px'>Confidence: {confidence:.2f}%</h4>", unsafe_allow_html=True)
 
     # -------------------------
-    # Bottom row: Grad-CAM + Interpretation side by side
+    # Bottom row: Grad-CAM + Interpretation
     # -------------------------
     col_heatmap, col_interpret = st.columns([1.3, 1])
     with col_heatmap:
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
-            img_width = img.width
-            img_height = img.height
-            heatmap_resized = cv2.resize(heatmap, (img_width, img_height))
+            # Resize heatmap overlay to match original image
+            heatmap_resized = cv2.resize(heatmap, (img.width, img.height))
             heatmap_resized = np.uint8(255 * heatmap_resized)
             heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
             img_np = np.array(img)
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
-            st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=True)
+            st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=True)
         else:
             st.warning("Grad-CAM could not be generated")
 
