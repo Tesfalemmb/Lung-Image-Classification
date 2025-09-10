@@ -22,33 +22,21 @@ except ImportError:
     TENSORFLOW_AVAILABLE = False
     st.error("TensorFlow not available. Please check requirements.txt.")
 
-MODEL_PATH = 'lung_classification_model_efficientnetb0.h5'
+MODEL_PATH = 'lung_classification_model_full.h5'  # Full model file (architecture + weights)
 
+# -------------------------
+# Load the full model only
+# -------------------------
 @st.cache_resource
 def load_model():
     if not TENSORFLOW_AVAILABLE:
         return None
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"❌ Model file not found: {MODEL_PATH}")
+        return None
     try:
-        if not os.path.exists(MODEL_PATH):
-            st.error(f"❌ Model file not found at: {MODEL_PATH}")
-            return None
-        try:
-            model = tf.keras.models.load_model(MODEL_PATH)
-            return model
-        except Exception:
-            base_model = tf.keras.applications.EfficientNetB0(
-                include_top=False,
-                input_shape=(224, 224, 3),
-                weights=None
-            )
-            x = base_model.output
-            x = tf.keras.layers.GlobalAveragePooling2D()(x)
-            x = tf.keras.layers.Dense(128, activation='relu')(x)
-            x = tf.keras.layers.Dropout(0.5)(x)
-            predictions = tf.keras.layers.Dense(4, activation='softmax')(x)
-            model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
-            model.load_weights(MODEL_PATH)
-            return model
+        model = tf.keras.models.load_model(MODEL_PATH)
+        return model
     except Exception as e:
         st.error(f"❌ Error loading model: {str(e)}")
         return None
@@ -82,6 +70,7 @@ def get_gradcam(img_array, model, class_index):
                 break
     if last_conv_layer is None:
         return None
+
     grad_model = tf.keras.models.Model(
         inputs=model.inputs,
         outputs=[model.get_layer(last_conv_layer).output, model.output]
@@ -96,11 +85,16 @@ def get_gradcam(img_array, model, class_index):
     heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
     return heatmap
 
+# -------------------------
+# Heatmap interpretation
+# -------------------------
 def heatmap_explanation():
     return [
         ("blue", "Low activation: minimal contribution to prediction."),
+        ("cyan", "Slight contribution: small influence on prediction."),
         ("green", "Moderate activation: moderate contribution."),
-        ("red", "High activation: strong influence on prediction."),
+        ("yellow", "High contribution: strong influence on prediction."),
+        ("red", "Very high activation: strongest influence on prediction."),
     ]
 
 # -------------------------
@@ -138,7 +132,8 @@ def main():
     col_img, col_pred = st.columns([1.3, 1])
     with col_img:
         st.subheader("🖼️ Uploaded Image")
-        st.image(img, caption="Uploaded Image", use_column_width=True)
+        img_resized = np.array(img.resize((500, 500)).convert("RGB"), dtype=np.uint8)
+        st.image(img_resized, caption="Uploaded Image", use_column_width=False)
 
     with col_pred:
         st.subheader("📊 Prediction Confidence")
@@ -160,13 +155,15 @@ def main():
         st.subheader("🔥 Grad-CAM Overlay")
         heatmap = get_gradcam(img_array, model, pred_class_index)
         if heatmap is not None:
-            # Resize heatmap overlay to match original image
             heatmap_resized = cv2.resize(heatmap, (img.width, img.height))
             heatmap_resized = np.uint8(255 * heatmap_resized)
             heatmap_resized = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
             img_np = np.array(img)
             superimposed = cv2.addWeighted(img_np, 0.6, heatmap_resized, 0.4, 0)
-            st.image(Image.fromarray(superimposed), caption=f"Grad-CAM Overlay ({pred_class})", use_column_width=True)
+            superimposed_resized = cv2.resize(superimposed, (500, 500))
+            superimposed_resized = cv2.cvtColor(superimposed_resized, cv2.COLOR_BGR2RGB)
+            superimposed_resized = superimposed_resized.astype(np.uint8)
+            st.image(superimposed_resized, caption=f"Grad-CAM Overlay ({pred_class})", use_container_width=False)
         else:
             st.warning("Grad-CAM could not be generated")
 
