@@ -102,8 +102,8 @@ def heatmap_explanation():
     return [
         ("red", "Very high activation: strongest influence on prediction."),
         ("yellow", "Strong activation: significant contribution."),
+        ("green", "Moderate activation: moderate contribution."),
         ("blue", "Low activation: minimal contribution to prediction."),
-         ("green", "Moderate activation: moderate contribution."),
     ]
 
 # -------------------------
