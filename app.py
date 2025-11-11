@@ -68,10 +68,11 @@ def preprocess_image(img: Image.Image):
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     return img_array
 
-# Grad-CAM generation
-# -------------------------
 def get_gradcam(img_array, model, class_index):
-    # Ensure batch dimension
+    import tensorflow as tf
+    import numpy as np
+
+    # Ensure input has batch dimension
     if img_array.ndim == 3:
         img_array = np.expand_dims(img_array, axis=0)
 
@@ -87,18 +88,27 @@ def get_gradcam(img_array, model, class_index):
                 last_conv_layer = layer.name
                 break
     if last_conv_layer is None:
+        print("⚠️ No convolutional layer found in model.")
         return None
 
-    # Define Grad-CAM model
+    # Build the Grad-CAM model
     grad_model = tf.keras.models.Model(
         inputs=model.inputs,
         outputs=[model.get_layer(last_conv_layer).output, model.output]
     )
 
-    # Compute gradient of the class output with respect to the feature map
+    # Forward pass
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
-        # Handle prediction shape safely
+
+        # Debug check
+        if predictions is None:
+            print("❌ Grad-CAM error: model output is None. Check model architecture or output tensor.")
+            return None
+
+        # Handle shape safely
+        if isinstance(predictions, (list, tuple)):
+            predictions = predictions[0]  # take first output if multiple
         if len(predictions.shape) == 1:
             loss = predictions[class_index]
         else:
@@ -106,19 +116,20 @@ def get_gradcam(img_array, model, class_index):
 
     # Compute gradients
     grads = tape.gradient(loss, conv_outputs)
+    if grads is None:
+        print("❌ Grad-CAM error: gradients are None. Possibly due to non-differentiable layer or wrong conv layer.")
+        return None
 
-    # Pool gradients over spatial dimensions
     pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-
-    # Weight the convolution outputs
     conv_outputs = conv_outputs[0]
     heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
 
-    # Normalize the heatmap
+    # Normalize heatmap
     heatmap = np.maximum(heatmap, 0)
     heatmap /= (np.max(heatmap) + 1e-8)
 
     return heatmap
+
 
 
 def heatmap_explanation():
