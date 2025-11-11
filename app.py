@@ -68,10 +68,14 @@ def preprocess_image(img: Image.Image):
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
     return img_array
 
-# -------------------------
 # Grad-CAM generation
 # -------------------------
 def get_gradcam(img_array, model, class_index):
+    # Ensure batch dimension
+    if img_array.ndim == 3:
+        img_array = np.expand_dims(img_array, axis=0)
+
+    # Find the last convolutional layer
     last_conv_layer = None
     for layer in reversed(model.layers):
         if 'conv' in layer.name.lower() and 'block7a' in layer.name:
@@ -84,19 +88,38 @@ def get_gradcam(img_array, model, class_index):
                 break
     if last_conv_layer is None:
         return None
+
+    # Define Grad-CAM model
     grad_model = tf.keras.models.Model(
         inputs=model.inputs,
         outputs=[model.get_layer(last_conv_layer).output, model.output]
     )
+
+    # Compute gradient of the class output with respect to the feature map
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
-        loss = predictions[:, class_index]
+        # Handle prediction shape safely
+        if len(predictions.shape) == 1:
+            loss = predictions[class_index]
+        else:
+            loss = predictions[:, class_index]
+
+    # Compute gradients
     grads = tape.gradient(loss, conv_outputs)
+
+    # Pool gradients over spatial dimensions
     pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+
+    # Weight the convolution outputs
     conv_outputs = conv_outputs[0]
     heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
-    heatmap = np.maximum(heatmap, 0) / (np.max(heatmap) + 1e-8)
+
+    # Normalize the heatmap
+    heatmap = np.maximum(heatmap, 0)
+    heatmap /= (np.max(heatmap) + 1e-8)
+
     return heatmap
+
 
 def heatmap_explanation():
     return [
