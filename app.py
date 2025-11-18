@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # Page configuration
 # -------------------------
 st.set_page_config(
-    page_title="Lung Classification App",
+    page_title="Sheep Lung Classification App",
     page_icon="🫁",
     layout="wide"
 )
