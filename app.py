@@ -144,7 +144,7 @@ def heatmap_explanation():
 # Main App
 # -------------------------
 def main():
-    st.title("🫁 Lung Image Classification App")
+    st.title("🫁 Sheep Lung Image Classification App")
     st.write("Upload a lung image to classify it and visualize important regions.")
 
     uploaded_file = st.file_uploader("Choose a lung image", type=["jpg","jpeg","png"])
